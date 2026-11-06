@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bán lẻ Quầy POS - Nhà thuốc Minh Tiến</title>
+  <!-- /* Nhúng file CSS định kiểu dùng chung cho cả 3 màn hình */ -->
+  <link rel="stylesheet" href="../../shared/css/common.css" />
+  <!-- /* Nhúng file CSS định kiểu riêng cho Màn hình Bán lẻ Quầy POS */ -->
+  <link rel="stylesheet" href="./ban-le-pos.css" />
+</head>
+<body>
+
+  <!-- /* Khung hiển thị thông báo nổi Toast Notification ở góc trên bên phải */ -->
+  <div id="toast-container"></div>
+
+  <!-- /* Thanh điều hướng dọc bên trái (Sidebar) */ -->
+  <aside class="sidebar">
+    <!-- /* Ô thương hiệu Nhà thuốc Minh Tiến ở góc trên bên trái */ -->
+    <div class="brand">
+      <h1>NHÀ THUỐC MINH TIẾN</h1>
+      <p>Hệ thống Quản lý đạt chuẩn GPP</p>
+    </div>
+
+    <!-- /* Danh sách các trang chính của hệ thống */ -->
+    <nav class="nav-list">
+      <a class="nav-item active" href="../ban-le-pos/ban-le-pos.html">
+        <span class="nav-title">Bán lẻ Quầy POS</span>
+        <span class="nav-uc">Danh sách sản phẩm, Giỏ hàng, FEFO</span>
+      </a>
+      <a class="nav-item" href="../nhap-kho-gpp/nhap-kho-gpp.html">
+        <span class="nav-title">Nhập kho &amp; Kiểm nhập GPP</span>
+        <span class="nav-uc">Lập phiếu, Tự quy đổi ĐVT &amp; Duyệt</span>
+      </a>
+      <a class="nav-item" href="../danh-muc-va-canh-bao-han/danh-muc-va-canh-bao-han.html">
+        <span class="nav-title">Thuốc &amp; Cảnh báo Lô/Hạn</span>
+        <span class="nav-uc">Danh mục ĐVT &amp; Cảnh báo Cận hạn</span>
+      </a>
+    </nav>
+
+    <!-- /* Nút chọn đổi tài khoản ở góc dưới bên trái */ -->
+    <div class="role-switcher">
+      <label for="currentRole">Đổi tài khoản trực tiếp:</label>
+      <select id="currentRole">
+        <option value="ACT-02">Dược sĩ bán lẻ tại quầy</option>
+        <option value="ACT-01">Chủ nhà thuốc / Quản lý</option>
+      </select>
+    </div>
+  </aside>
+
+  <!-- /* Khu vực nội dung chính của trang Bán lẻ Quầy POS */ -->
+  <div class="main-wrapper">
+    <!-- /* Thanh Header hiển thị tiêu đề và trạng thái tài khoản đang đăng nhập */ -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2>Bán lẻ Quầy POS</h2>
+        <span>Địa chỉ: Số 39, Đường Kim Giang, Kim Văn, Định Công, Hà Nội</span>
+      </div>
+      <div>
+        <span class="badge-role" id="roleBadge">Đang đăng nhập: DSTH. Trần Thị Mai</span>
+      </div>
+    </header>
+
+    <!-- /* Nội dung chính chia 2 cột theo đúng file thiết kế quay pos 3.txt .drawio */ -->
+    <main class="screen-content">
+      <div class="pos-layout">
+
+        <!-- /* CỘT TRÁI: Nút Giỏ hàng bên trái, Tìm kiếm bên phải và Bảng danh sách toàn bộ sản phẩm trong DB */ -->
+        <div class="card pos-left-card">
+          <!-- /* Thanh công cụ phía trên bảng: Bên trái là nút Giỏ hàng mở Popup, bên phải là ô Tìm kiếm tên thuốc */ -->
+          <div class="pos-top-bar">
+            <!-- /* Nút Giỏ hàng ở bên trái dùng để mở Popup hiển thị những sản phẩm đã thêm vào giỏ hàng */ -->
+            <div class="pos-cart-btn-group">
+              <button type="button" class="btn btn-cart-trigger" id="btnOpenCartPopup" onclick="openCartPopup()">
+                <span>🛒 Giỏ hàng đã chọn</span>
+                <span class="cart-count-badge" id="cartCountBadge">0</span>
+              </button>
+              <button type="button" class="btn btn-outline btn-sm-test" onclick="simulateExpiredScan()" title="Kiểm thử chặn bán lô thuốc đã hết hạn KHOA_HET_HAN">
+                Test quét Lô hết hạn
+              </button>
+            </div>
+
+            <!-- /* Khu vực tìm kiếm theo tên sản phẩm ở bên phải theo đúng bố cục file drawio */ -->
+            <div class="pos-search-group">
+              <input
+                type="text"
+                id="posSearchInput"
+                placeholder="Tìm kiếm tên thuốc.........."
+                onkeydown="if(event.key === 'Enter') searchPosProducts()"
+              />
+              <button type="button" class="btn btn-search-icon" id="btnPosSearch" onclick="searchPosProducts()" title="Tìm kiếm theo tên sản phẩm">
+                🔍 Tìm kiếm
+              </button>
+            </div>
+          </div>
+
+          <!-- /* Bảng hiển thị tất cả những sản phẩm có trong CSDL SQL Server (tbl_dm_thuoc + vw_lo_thuoc_fefo) */ -->
+          <div class="table-responsive">
+            <table class="pos-product-table">
+              <thead>
+                <tr>
+                  <th>Thuốc &amp;<br/>Phân loại</th>
+                  <th>Lô xuất<br/>tự động</th>
+                  <th>Chọn ĐVT Bán</th>
+                  <th>Số lượng<br/>mua</th>
+                  <th>SL trừ<br/>kho cơ bản</th>
+                  <th>Đơn giá<br/>Niêm yết</th>
+                  <th>Thành<br/>tiền</th>
+                  <th>Thao tác<br/>Giỏ hàng</th>
+                </tr>
+              </thead>
+              <tbody id="posProductListBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- /* CỘT PHẢI: Khung XỬ LÝ ĐƠN HÀNG & THANH TOÁN */ -->
+        <div class="card pos-right-card">
+          <div class="pay-panel-title">XỬ LÝ ĐƠN HÀNG &amp; THANH TOÁN</div>
+
+          <!-- /* Khung hiển thị Quy trình Thao tác Chuẩn SOP tại Quầy */ -->
+          <div class="sop-box" id="sopContainer">
+            <h4>Quy trình Thao tác Chuẩn SOP tại Quầy</h4>
+            <ol class="sop-steps" id="sopStepsList">
+              <li>Bước 1: Hỏi kỹ triệu chứng, tiền sử dị ứng thuốc và đối tượng dùng.</li>
+              <li>Bước 2: Kiểm tra đối chiếu đúng Số lô trên vỉ/hộp thuốc và hạn dùng còn hiệu lực.</li>
+              <li>Bước 3: Tư vấn rõ liều dùng, thời điểm uống và in hóa đơn K80 giao khách.</li>
+            </ol>
+          </div>
+
+          <!-- /* Khung tóm tắt nhanh các sản phẩm đang có trong giỏ hàng bên cột thanh toán */ -->
+          <div class="mini-cart-summary">
+            <div class="mini-cart-header">
+              <span>Sản phẩm trong đơn (<strong id="miniCartCount">0</strong> món):</span>
+              <button type="button" class="link-btn" onclick="openCartPopup()">Xem / Sửa Giỏ hàng &raquo;</button>
+            </div>
+            <div id="miniCartItemsList" class="mini-cart-list">
+              Chưa có sản phẩm nào trong giỏ.
+            </div>
+          </div>
+
+          <!-- /* Khung nhập thông tin Đơn thuốc Kê đơn Bác sĩ */ -->
+          <div class="etc-prescription-box" id="etcPrescriptionBox" style="display: none;">
+            <div class="etc-title">⚠️ Bắt buộc nhập Đơn thuốc Kê đơn</div>
+            <div class="grid-2" style="margin-bottom: 8px;">
+              <div class="form-group">
+                <label>Mã đơn thuốc</label>
+                <input type="text" id="etcCode" placeholder="VD: DT-BM-99201" />
+              </div>
+              <div class="form-group">
+                <label>Cơ sở khám bệnh</label>
+                <input type="text" id="etcClinic" placeholder="VD: BV Bạch Mai" />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label>Bác sĩ kê đơn (*)</label>
+              <input type="text" id="etcDoctor" placeholder="VD: BS.CKII Phạm Quốc Khánh" />
+            </div>
+            <div class="form-group">
+              <label>Chẩn đoán bệnh trên đơn (*)</label>
+              <input type="text" id="etcDiagnosis" placeholder="VD: Viêm amidan cấp mủ bội nhiễm" />
+            </div>
+          </div>
+
+          <!-- /* Chọn phương thức thanh toán: Tiền mặt hoặc VietQR động NAPAS 247 */ -->
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label>Phương thức thanh toán:</label>
+            <select id="posPayMethod" onchange="toggleVietQRPreview()">
+              <option value="TIEN_MAT">Tiền mặt tại quầy</option>
+              <option value="VIETQR">Chuyển khoản VietQR động NAPAS 247</option>
+              <option value="THE">Thẻ ngân hàng POS</option>
+            </select>
+          </div>
+
+          <!-- /* Khung hiển thị mã QR thanh toán động khi chọn phương thức VIETQR */ -->
+          <div id="vietQrBox" class="qr-box" style="display: none;">
+            <div style="font-weight: 700; color: var(--primary-dark);">MÃ VIETQR ĐỘNG NAPAS 247</div>
+            <div style="font-size: 11px; color: var(--muted); margin: 4px 0;">STK: 1903888999 - NHÀ THUỐC MINH TIẾN</div>
+            <div class="qr-placeholder"></div>
+            <div id="qrAmountText" style="font-weight: 700; color: var(--danger);">Số tiền: 0 VNĐ</div>
+          </div>
+
+          <!-- /* Hai ô Tiền khách đưa và Tiền thừa trả khách */ -->
+          <div class="cash-calc-row">
+            <div class="form-group">
+              <label for="customerCashInput">Tiền khách đưa:</label>
+              <input
+                type="number"
+                id="customerCashInput"
+                placeholder="VD: 150000"
+                min="0"
+                step="1000"
+                oninput="calculateChangeAmount()"
+              />
+            </div>
+            <div class="form-group">
+              <label for="customerChangeOutput">Tiền thừa trả khách:</label>
+              <input
+                type="text"
+                id="customerChangeOutput"
+                value="0 VNĐ"
+                readonly
+              />
+            </div>
+          </div>
+
+          <!-- /* Ô hiển thị TỔNG THANH TOÁN */ -->
+          <div class="total-pay-box">
+            <span class="total-pay-label">TỔNG THANH TOÁN:</span>
+            <span class="total-pay-value" id="posTotalAmount">0 VNĐ</span>
+          </div>
+
+          <!-- /* Nút bấm XÁC NHẬN THANH TOÁN */ -->
+          <button type="button" class="btn btn-submit-pay" id="btnSubmitPay" onclick="checkoutPOS()">
+            XÁC NHẬN THANH TOÁN
+          </button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- /* =====================================================================
+       POPUP (MODAL) GIỎ HÀNG: HIỂN THỊ NHỮNG SẢN PHẨM ĐÃ THÊM VÀO GIỎ HÀNG
+       ===================================================================== */ -->
+  <div class="modal-backdrop" id="cartPopupModal">
+    <div class="modal" style="max-width: 920px;">
+      <div class="modal-header">
+        <h3>🛒 Danh sách Sản phẩm đã thêm vào Giỏ hàng</h3>
+        <button type="button" class="btn btn-outline" onclick="closeCartPopup()">Đóng [X]</button>
+      </div>
+
+      <!-- /* Bảng chi tiết các sản phẩm trong Popup Giỏ hàng */ -->
+      <div class="table-responsive" style="margin-bottom: 16px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Thuốc &amp; Phân loại</th>
+              <th>Lô xuất tự động</th>
+              <th>Chọn ĐVT Bán</th>
+              <th>Số lượng mua</th>
+              <th>SL trừ kho cơ bản</th>
+              <th>Đơn giá Niêm yết</th>
+              <th>Thành tiền</th>
+              <th>Xóa</th>
+            </tr>
+          </thead>
+          <tbody id="posCartPopupBody"></tbody>
+        </table>
+      </div>
+
+      <!-- /* Chân Popup Giỏ hàng hiển thị tổng tiền tạm tính và các nút thao tác nhanh */ -->
+      <div class="cart-popup-footer">
+        <div>
+          <span>Tổng tiền giỏ hàng: </span>
+          <strong id="cartPopupTotalText" style="font-size: 18px; color: var(--primary-dark);">0 VNĐ</strong>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="btn btn-danger" onclick="clearPosCart()">Xóa toàn bộ giỏ</button>
+          <button type="button" class="btn btn-outline" onclick="closeCartPopup()">Tiếp tục chọn thuốc</button>
+          <button type="button" class="btn btn-primary" onclick="proceedFromCartPopup()">Xác nhận &amp; Chuyển sang Thanh toán</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- /* =====================================================================
+       MODAL XEM TRƯỚC HÓA ĐƠN NHIỆT KHỔ K80 SAU KHI THANH TOÁN THÀNH CÔNG
+       ===================================================================== */ -->
+  <div class="modal-backdrop" id="receiptModal">
+    <div class="modal" style="max-width: 430px;">
+      <div class="modal-header">
+        <h3>Hóa đơn Bán lẻ Khổ K80</h3>
+        <button type="button" class="btn btn-outline" onclick="closeReceiptModal()">Đóng [X]</button>
+      </div>
+      <div class="receipt-preview" id="receiptContent"></div>
+    </div>
+  </div>
+
+  <!-- /* Nhúng file JS tiện ích dùng chung */ -->
+  <script src="../../shared/js/common.js"></script>
+  <!-- /* Nhúng file JS xử lý nghiệp vụ riêng cho Màn hình Bán lẻ Quầy POS */ -->
+  <script src="./ban-le-pos.js"></script>
+</body>
+</html>

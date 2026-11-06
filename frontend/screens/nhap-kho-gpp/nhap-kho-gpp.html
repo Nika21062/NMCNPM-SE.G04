@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nhập Kho &amp; Kiểm Nhập Cảm Quan GPP - Nhà thuốc Minh Tiến</title>
+  <!-- /* Nhúng file CSS định kiểu dùng chung */ -->
+  <link rel="stylesheet" href="../../shared/css/common.css" />
+  <!-- /* Nhúng file CSS định kiểu riêng cho trang Nhập kho & Kiểm nhập GPP */ -->
+  <link rel="stylesheet" href="./nhap-kho-gpp.css" />
+</head>
+<body>
+
+  <!-- /* Khung hiển thị thông báo nổi Toast Notification ở góc trên bên phải */ -->
+  <div id="toast-container"></div>
+
+  <!-- /* Thanh điều hướng dọc bên trái (Sidebar) */ -->
+  <aside class="sidebar">
+    <!-- /* Ô thương hiệu Nhà thuốc Minh Tiến */ -->
+    <div class="brand">
+      <h1>NHÀ THUỐC MINH TIẾN</h1>
+      <p>Hệ thống Quản lý đạt chuẩn GPP</p>
+    </div>
+
+    <!-- /* Danh sách các trang chính của hệ thống */ -->
+    <nav class="nav-list">
+      <a class="nav-item" href="../ban-le-pos/ban-le-pos.html">
+        <span class="nav-title">Bán lẻ Quầy POS</span>
+        <span class="nav-uc">Danh sách sản phẩm, Giỏ hàng, FEFO</span>
+      </a>
+      <a class="nav-item active" href="../nhap-kho-gpp/nhap-kho-gpp.html">
+        <span class="nav-title">Nhập kho &amp; Kiểm nhập GPP</span>
+        <span class="nav-uc">Lập phiếu, Tự quy đổi ĐVT &amp; Duyệt</span>
+      </a>
+      <a class="nav-item" href="../danh-muc-va-canh-bao-han/danh-muc-va-canh-bao-han.html">
+        <span class="nav-title">Thuốc &amp; Cảnh báo Lô/Hạn</span>
+        <span class="nav-uc">Danh mục ĐVT &amp; Cảnh báo Cận hạn</span>
+      </a>
+    </nav>
+
+    <!-- /* Nút chọn đổi tài khoản trực tiếp ở góc dưới bên trái */ -->
+    <div class="role-switcher">
+      <label for="currentRole">Đổi tài khoản trực tiếp:</label>
+      <select id="currentRole">
+        <option value="ACT-02">Dược sĩ bán lẻ tại quầy</option>
+        <option value="ACT-01">Chủ nhà thuốc / Quản lý</option>
+      </select>
+    </div>
+  </aside>
+
+  <!-- /* Khu vực nội dung chính của trang Lập Phiếu Nhập Kho & Kiểm Nhập Cảm Quan GPP */ -->
+  <div class="main-wrapper">
+    <!-- /* Thanh Header hiển thị tiêu đề và vai trò đang đăng nhập */ -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2>Lập Phiếu Nhập Kho &amp; Kiểm Nhập Cảm Quan GPP</h2>
+        <span>Địa chỉ: Số 39, Đường Kim Giang, Kim Văn, Định Công, Hà Nội</span>
+      </div>
+      <div>
+        <span class="badge-role" id="roleBadge">Đang đăng nhập: DSTH. Trần Thị Mai</span>
+      </div>
+    </header>
+
+    <main class="screen-content">
+      <!-- /* KHỐI 1: Thông tin Chứng từ Hóa đơn GTGT & Nhà phân phối đạt chuẩn GDP */ -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">1. Thông tin Chứng từ Hóa đơn GTGT &amp; Nhà phân phối đạt chuẩn GDP</div>
+        </div>
+
+        <div class="grid-4">
+          <div class="form-group">
+            <label for="impSupplier">Nhà phân phối đạt chuẩn GDP (*)</label>
+            <select id="impSupplier">
+              <option value="">-- Chọn nhà phân phối --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="impInvoiceNo">Số Hóa đơn điện tử GTGT (*)</label>
+            <input type="text" id="impInvoiceNo" placeholder="VD: HD-GTGT-0084921" />
+          </div>
+          <div class="form-group">
+            <label for="impInvoiceDate">Ngày hóa đơn (*)</label>
+            <input type="date" id="impInvoiceDate" />
+          </div>
+          <div class="form-group">
+            <label for="impFileUrl">Đính kèm PDF/Ảnh Hóa đơn GTGT</label>
+            <input type="text" id="impFileUrl" placeholder="VD: hoadon_vat_0084921.pdf" />
+          </div>
+        </div>
+      </div>
+
+      <!-- /* KHỐI 2: Thêm Lô thuốc vào Phiếu nhập */ -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">2. Thêm Lô thuốc vào Phiếu nhập</div>
+          </div>
+        </div>
+
+        <!-- /* Hàng 1: Chọn thuốc, chọn ĐVT nhập (+ Thêm nhanh ĐVT), số lượng nhập, xem trước quy đổi cơ bản */ -->
+        <div class="grid-4" style="margin-bottom: 12px;">
+          <div class="form-group">
+            <label for="impDrugSelect">Chọn Thuốc nhập kho (*)</label>
+            <select id="impDrugSelect" onchange="onImportDrugChange()">
+              <option value="">-- Chọn thuốc nhập kho --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Đơn vị tính nhập (*)</span>
+              <button
+                type="button"
+                class="btn btn-outline"
+                id="btnQuickAddUnit"
+                style="padding:2px 8px; font-size:11px; color:var(--primary); border-color:var(--primary);"
+                onclick="openQuickUnitModal()"
+              >
+                + Thêm nhanh quy cách ĐVT
+              </button>
+            </label>
+            <select id="impUnitSelect" onchange="calcImportConversion()">
+              <option value="">-- Chọn đơn vị tính --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="impQty">Số lượng nhập (*)</label>
+            <input type="number" id="impQty" placeholder="VD: 5" min="1" oninput="calcImportConversion()" />
+          </div>
+          <div class="form-group">
+            <label for="impBaseQtyPreview">SL Quy đổi cơ bản</label>
+            <input type="text" id="impBaseQtyPreview" placeholder="VD: +900 Viên" readonly />
+          </div>
+        </div>
+
+        <!-- /* Hàng 2: Nhập Số lô sản xuất, Ngày sản xuất, Hạn sử dụng và Đơn giá nhập */ -->
+        <div class="grid-4" style="margin-bottom: 12px;">
+          <div class="form-group">
+            <label for="impBatchNo">Số lô sản xuất (*)</label>
+            <input type="text" id="impBatchNo" placeholder="VD: LOT-2610A" />
+          </div>
+          <div class="form-group">
+            <label for="impMfgDate">Ngày sản xuất (*)</label>
+            <input type="date" id="impMfgDate" />
+          </div>
+          <div class="form-group">
+            <label for="impExpDate">Hạn sử dụng (*)</label>
+            <input type="date" id="impExpDate" />
+          </div>
+          <div class="form-group">
+            <label for="impPrice">Đơn giá nhập theo ĐVT chọn (VNĐ)</label>
+            <input type="number" id="impPrice" placeholder="VD: 145000" min="1000" />
+          </div>
+        </div>
+
+        <!-- /* Khung nhập Lý do duyệt đặc cách (Tự động hiện khi có lô thuốc hạn còn lại < 180 ngày) */ -->
+        <div class="form-group" id="specialReasonGroup" style="display: none; margin-bottom: 12px;">
+          <label for="impSpecialReason" style="color: var(--warning);">
+            ⚠️ Lý do trình Chủ nhà thuốc duyệt đặc cách lô cận hạn (*):
+          </label>
+          <input
+            type="text"
+            id="impSpecialReason"
+            placeholder="VD: Thuốc đặc trị hiếm, cam kết tiêu thụ hết trong 30 ngày..."
+          />
+        </div>
+
+        <!-- /* Nút bấm thêm dòng lô thuốc vào bảng dự thảo phiếu nhập */ -->
+        <div class="toolbar">
+          <button type="button" class="btn btn-primary" onclick="addImportLine()">
+            + Thêm dòng lô vào Phiếu nhập
+          </button>
+        </div>
+
+        <!-- /* Bảng danh sách các dòng lô thuốc đã thêm vào dự thảo Phiếu nhập kho */ -->
+        <table style="margin-top: 14px;">
+          <thead>
+            <tr>
+              <th>Thuốc</th>
+              <th>Số Lô</th>
+              <th>NSX – HSD</th>
+              <th>ĐVT Nhập</th>
+              <th>SL Nhập</th>
+              <th>SL Quy đổi Cơ bản</th>
+              <th>Thành tiền</th>
+              <th>Kiểm tra Hạn GPP</th>
+              <th>Xóa</th>
+            </tr>
+          </thead>
+          <tbody id="importLinesBody"></tbody>
+        </table>
+
+        <!-- /* KHỐI 3: Checklist Kiểm nhập cảm quan chuẩn GPP bắt buộc 100% */ -->
+        <div class="checklist-box">
+          <strong>3. Checklist Kiểm nhập cảm quan chuẩn GPP bắt buộc 100%:</strong>
+          <label><input type="checkbox" id="chkGpp1" /> [1] Bao bì, niêm phong của nhà sản xuất nguyên vẹn, không ẩm mốc hay móp méo.</label>
+          <label><input type="checkbox" id="chkGpp2" /> [2] Chữ in Số lô, Hạn sử dụng, Số đăng ký rõ nét, khớp 100% với Hóa đơn GTGT.</label>
+          <label><input type="checkbox" id="chkGpp3" /> [3] Đạt điều kiện nhiệt độ bảo quản vận chuyển theo quy định.</label>
+        </div>
+
+        <!-- /* Hai nút thao tác Bước 1 (Gửi duyệt kiểm nhập) và Bước 2 (Phê duyệt cộng tồn kho) */ -->
+        <div class="toolbar" style="margin-top: 16px; justify-content: flex-end;">
+          <button type="button" class="btn btn-warning" onclick="submitForInspection()">
+            Bước 1 (Dược sĩ): Gửi duyệt kiểm nhập
+          </button>
+          <button type="button" class="btn btn-success" id="btnApproveImport" onclick="approveImportStock()">
+            Bước 2 (Chủ nhà thuốc): Phê duyệt Nhập kho
+          </button>
+        </div>
+      </div>
+
+      <!-- /* KHỐI 4: Lịch sử Phiếu Nhập Kho & Chi tiết Thông số Lô Nhập */ -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">4. Lịch sử Phiếu Nhập Kho &amp; Chi tiết Thông số Lô Nhập</div>
+          </div>
+          <div class="toolbar">
+            <input
+              type="text"
+              id="searchReceiptHistoryInput"
+              placeholder="Tìm mã phiếu, số HĐ, NCC, tên thuốc, số lô..."
+              oninput="renderImportReceiptsHistory()"
+              style="width: 280px;"
+            />
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã Phiếu &amp;<br/>Thời gian lập</th>
+                <th>Nhà phân phối GDP &amp;<br/>Hóa đơn GTGT</th>
+                <th>Nhân sự &amp;<br/>Checklist GPP</th>
+                <th>Chi tiết các Lô thuốc nhập kho</th>
+                <th>Tổng tiền<br/>Phiếu nhập</th>
+                <th>Trạng thái &amp;<br/>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="importHistoryTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- /* =====================================================================
+       MODAL THÊM NHANH QUY CÁCH ĐVT NGAY TRÊN MÀN NHẬP KHO
+       ===================================================================== */ -->
+  <div class="modal-backdrop" id="quickUnitModal">
+    <div class="modal" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3>Thêm nhanh Quy cách Đóng gói / Đơn vị tính mới</h3>
+        <button type="button" class="btn btn-outline" onclick="closeQuickUnitModal()">Đóng [X]</button>
+      </div>
+
+      <div class="quick-unit-banner">
+        Đang thêm quy cách đóng gói mới cho thuốc: <strong id="quDrugName" style="color:var(--primary-dark);"></strong><br/>
+        <small style="color:var(--muted);">Đơn vị cơ bản nhỏ nhất hiện tại: <strong id="quBaseUnit">Viên</strong></small>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 12px;">
+        <div class="form-group">
+          <label for="quUnitName">Tên quy cách Đơn vị tính mới (*)</label>
+          <input type="text" id="quUnitName" placeholder="VD: Hộp, Vỉ..." />
+        </div>
+        <div class="form-group">
+          <label for="quRetailPrice">Giá bán lẻ niêm yết của quy cách này (VNĐ) (*)</label>
+          <input type="number" id="quRetailPrice" placeholder="VD: 180000" min="500" />
+        </div>
+      </div>
+
+      <div class="quick-pack-calc">
+        <div style="font-weight:600; font-size:12px; margin-bottom:8px; color:#334155;">
+          Công cụ tính nhanh tỷ lệ quy đổi:
+        </div>
+        <div class="grid-3">
+          <div class="form-group">
+            <label for="quSubPackCount">Số Vỉ / Lốc trong 1 Hộp</label>
+            <input type="number" id="quSubPackCount" placeholder="VD: 10" min="1" oninput="calcQuickPackRate()" />
+          </div>
+          <div class="form-group">
+            <label for="quPillsPerPack">Số Viên / Đơn vị cơ bản trong 1 Vỉ</label>
+            <input type="number" id="quPillsPerPack" placeholder="VD: 10" min="1" oninput="calcQuickPackRate()" />
+          </div>
+          <div class="form-group">
+            <label for="quFinalRate">Tỷ lệ quy đổi ra ĐVT Cơ bản (*)</label>
+            <input type="number" id="quFinalRate" placeholder="VD: 100" min="1" />
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-outline" onclick="closeQuickUnitModal()">Hủy</button>
+        <button type="button" class="btn btn-primary" onclick="saveQuickUnit()">Lưu Quy cách &amp; Chọn ngay vào Phiếu nhập</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- /* Nhúng file JS tiện ích dùng chung */ -->
+  <script src="../../shared/js/common.js"></script>
+  <!-- /* Nhúng file JS xử lý nghiệp vụ riêng của Màn hình 2: Nhập kho GPP */ -->
+  <script src="./nhap-kho-gpp.js"></script>
+</body>
+</html>

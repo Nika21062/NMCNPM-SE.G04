@@ -1,0 +1,21 @@
+# Thư viện Node.js (cài lại bằng npm install)
+node_modules/
+
+# Cấu hình riêng từng máy (mật khẩu SQL)
+.env
+
+# Log
+*.log
+npm-debug.log*
+
+# File hệ điều hành / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# File nén / sao lưu
+*.zip
+*.bak
+~$*

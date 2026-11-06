@@ -1,0 +1,45 @@
+/* ============================================================================
+   BẢNG ĐỊNH KIỂU RIÊNG CHO MÀN HÌNH 2: NHẬP KHO & KIỂM NHẬP GPP (nhap-kho-gpp.css)
+   Chức năng: Định dạng khung Checklist cảm quan 3 tiêu chí GPP và cửa sổ Modal
+   thêm nhanh quy cách đóng gói đơn vị tính
+   ============================================================================ */
+
+/* Khung chứa 3 tiêu chí kiểm nhập cảm quan chuẩn GPP bắt buộc */
+.checklist-box {
+  background: #f0f6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 14px;
+  color: #1e3a8a;
+}
+
+/* Định dạng từng dòng checkbox trong khung kiểm nhập cảm quan */
+.checklist-box label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+  cursor: pointer;
+  color: #1e293b;
+}
+
+/* Khung thông tin thuốc đang được thêm nhanh quy cách ĐVT trên Modal */
+.quick-unit-banner {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+/* Khung công cụ nhân tự động tỷ lệ quy đổi (Số vỉ x Số viên) */
+.quick-pack-calc {
+  background: #f8fbff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+}

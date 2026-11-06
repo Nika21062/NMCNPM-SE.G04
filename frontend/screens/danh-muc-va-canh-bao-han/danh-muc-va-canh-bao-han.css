@@ -1,0 +1,98 @@
+/* ============================================================================
+   BẢNG ĐỊNH KIỂU RIÊNG CHO MÀN HÌNH 3: THUỐC & CẢNH BÁO LÔ/HẠN
+   File: danh-muc-va-canh-bao-han.css
+   Chức năng: Định dạng thanh chuyển đổi 2 Tab (UC-01 & UC-03), các nút lọc
+   nhanh theo 5 mức màu hạn dùng (Filter Pills) và khung cấu hình ĐVT trên Modal
+   ============================================================================ */
+
+/* Thanh chứa 2 nút chuyển đổi Tab phía trên cùng của Màn hình 3 */
+.tabs-header {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #bfdbfe;
+  margin-bottom: 18px;
+}
+
+/* Định dạng từng nút bấm chuyển Tab */
+.tab-btn {
+  padding: 11px 20px;
+  border: 1px solid #dbeafe;
+  border-bottom: none;
+  background: #eff6ff;
+  color: #1e40af;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  background: #dbeafe;
+}
+
+/* Nút Tab đang được chọn kích hoạt */
+.tab-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+}
+
+/* Ẩn nội dung Tab khi chưa được chọn */
+.tab-pane {
+  display: none;
+}
+
+/* Hiển thị nội dung Tab đang kích hoạt */
+.tab-pane.active {
+  display: block;
+}
+
+/* Khung chứa các nút lọc nhanh lô thuốc theo màu cảnh báo hạn (UC-03) */
+.filter-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+/* Định dạng từng viên thuốc lọc (Pill Button) */
+.pill {
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: #334155;
+  transition: all 0.15s;
+}
+
+.pill:hover {
+  background: #f0f6ff;
+}
+
+/* Trạng thái viên lọc đang được chọn */
+.pill.active {
+  border-width: 2px;
+  font-weight: 700;
+}
+
+.pill-all.active { background: var(--primary); color: #ffffff; border-color: var(--primary); }
+.pill-red.active { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+.pill-orange.active { background: var(--warning-bg); color: var(--warning); border-color: var(--warning); }
+.pill-yellow.active { background: var(--yellow-bg); color: var(--yellow); border-color: var(--yellow); }
+.pill-green.active { background: var(--success-bg); color: var(--success); border-color: var(--success); }
+.pill-locked.active { background: var(--locked-bg); color: var(--locked); border-color: var(--locked); }
+
+/* Thanh tiêu đề phụ "Đơn vị tính & giá bán" trong Modal thêm thuốc theo đúng wireframe */
+.unit-config-header {
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  padding: 8px 12px;
+  font-weight: 700;
+  color: #1e3a8a;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}

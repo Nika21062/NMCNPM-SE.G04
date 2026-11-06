@@ -1,0 +1,448 @@
+/* ============================================================================
+   BẢNG ĐỊNH KIỂU DÙNG CHUNG CHO CẢ 3 MÀN HÌNH (shared/css/common.css)
+   Chức năng: Quy định biến màu sắc, bố cục khung Sidebar, Header, Card, Table,
+   Badge cảnh báo 5 mức hạn dùng và hộp thoại Popup/Modal toàn hệ thống
+   ============================================================================ */
+
+/* Khai báo biến màu sắc chuẩn thiết kế Nhà thuốc Minh Tiến GPP */
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --primary-light: #dbeafe;
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --text: #1e293b;
+  --muted: #64748b;
+  --border: #dbe3ef;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --yellow: #ca8a04;
+  --yellow-bg: #fef9c3;
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+  --locked: #475569;
+  --locked-bg: #e2e8f0;
+}
+
+/* Thiết lập lại khoảng cách lề và phông chữ mặc định cho toàn bộ phần tử HTML */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Định dạng khung thân trang chia làm 2 cột: Sidebar bên trái và Nội dung chính bên phải */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  display: flex;
+  min-height: 100vh;
+  font-size: 14px;
+}
+
+/* Khung thanh điều hướng dọc bên trái (Sidebar Navigation) */
+.sidebar {
+  width: 265px;
+  background: #ffffff;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 10px rgba(37, 99, 235, 0.04);
+}
+
+/* Ô hiển thị thương hiệu NHÀ THUỐC MINH TIẾN ở góc trên cùng bên trái */
+.brand {
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+  color: #ffffff;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Tiêu đề chính tên nhà thuốc trong khối Brand */
+.brand h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+
+/* Dòng mô tả phụ dưới tên nhà thuốc */
+.brand p {
+  font-size: 12px;
+  color: #dbeafe;
+  margin-top: 4px;
+}
+
+/* Danh sách chứa 3 nút chuyển đổi màn hình nghiệp vụ */
+.nav-list {
+  list-style: none;
+  padding: 12px;
+  flex: 1;
+}
+
+/* Định dạng từng mục điều hướng màn hình trên Sidebar */
+.nav-item {
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  text-decoration: none;
+  background: #f8fafc;
+}
+
+/* Hiệu ứng khi di chuột qua mục điều hướng */
+.nav-item:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: var(--primary-dark);
+}
+
+/* Trạng thái mục điều hướng của màn hình đang được chọn hiển thị */
+.nav-item.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary-dark);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
+}
+
+/* Tiêu đề chính của mục điều hướng */
+.nav-item .nav-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Ghi chú mã Use Case nhỏ bên dưới tiêu đề mục điều hướng */
+.nav-item .nav-uc {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+/* Khung chuyển đổi tài khoản / vai trò RBAC cố định ở góc dưới bên trái */
+.role-switcher {
+  padding: 14px 16px;
+  background: #f0f6ff;
+  border-top: 1px solid #bfdbfe;
+  font-size: 12px;
+}
+
+/* Nhãn hướng dẫn của bộ chọn đổi tài khoản RBAC */
+.role-switcher label {
+  display: block;
+  margin-bottom: 6px;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+/* Hộp chọn dropdown đổi vai trò Chủ nhà thuốc (ACT-01) / Dược sĩ bán lẻ (ACT-02) */
+.role-switcher select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #93c5fd;
+  background: #ffffff;
+  color: #1e3a8a;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Khung bao bọc khu vực nội dung chính bên phải Sidebar */
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* Thanh tiêu đề ngang phía trên cùng (Topbar Header) */
+.topbar {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Tiêu đề tên màn hình hiện tại ở bên trái Topbar */
+.topbar-left h2 {
+  font-size: 17px;
+  color: #1e3a8a;
+}
+
+/* Thông tin địa chỉ nhà thuốc và trạng thái kết nối CSDL dưới tiêu đề */
+.topbar-left span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Nhãn hiển thị tài khoản và quyền hạn đang đăng nhập ở góc phải Topbar */
+.badge-role {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid #93c5fd;
+  white-space: nowrap;
+}
+
+/* Vùng chứa nội dung chi tiết của từng màn hình */
+.screen-content {
+  padding: 18px 22px;
+  flex: 1;
+}
+
+/* Khung chứa các thông báo nổi (Toast Notification) ở góc trên bên phải */
+#toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 440px;
+}
+
+/* Hộp thông báo Toast hiển thị kết quả thao tác hoặc cảnh báo lỗi */
+.toast {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.14);
+  border-left: 5px solid;
+  background: #ffffff;
+  animation: slideIn 0.2s ease-out;
+}
+
+/* Màu sắc thông báo thành công (Xanh dương) */
+.toast.success { border-color: var(--primary); color: #1e3a8a; background: #eff6ff; }
+/* Màu sắc thông báo lỗi chặn nghiệp vụ (Đỏ) */
+.toast.error { border-color: var(--danger); color: #7f1d1d; background: #fef2f2; }
+/* Màu sắc thông báo cảnh báo chú ý (Cam) */
+.toast.warning { border-color: var(--warning); color: #78350f; background: #fffbeb; }
+
+/* Hiệu ứng trượt thông báo Toast từ phải sang trái */
+@keyframes slideIn {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Khung thẻ trắng (Card) dùng để gom nhóm các thành phần giao diện */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.04);
+}
+
+/* Phần đầu của thẻ Card chứa tiêu đề và thanh công cụ */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Tiêu đề in đậm bên trong Card */
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+/* Thanh công cụ ngang chứa các ô tìm kiếm và nút bấm */
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Định dạng chung cho các ô nhập liệu văn bản, mật khẩu, số, ngày tháng và hộp chọn */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: #ffffff;
+  color: var(--text);
+}
+
+/* Hiệu ứng viền sáng khi người dùng đặt con trỏ vào ô nhập liệu */
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+/* Định dạng các ô chỉ đọc (Read-only) như Đơn giá niêm yết bị khóa cứng */
+input[readonly] {
+  background: #f1f5f9;
+  color: #1e3a8a;
+  cursor: not-allowed;
+  font-weight: 600;
+}
+
+/* Định dạng cơ bản cho tất cả các nút bấm (Button) */
+.btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: 0.15s;
+}
+
+/* Nút bấm chính màu xanh dương */
+.btn-primary { background: var(--primary); color: #ffffff; }
+.btn-primary:hover { background: var(--primary-dark); }
+
+/* Nút bấm viền mảnh nền trắng */
+.btn-outline { background: #ffffff; border-color: #93c5fd; color: var(--primary-dark); }
+.btn-outline:hover { background: #eff6ff; }
+
+/* Các nút bấm trạng thái: Nguy hiểm (Đỏ), Cảnh báo (Cam), Duyệt thành công (Xanh lá) */
+.btn-danger { background: var(--danger); color: #ffffff; }
+.btn-warning { background: var(--warning); color: #ffffff; }
+.btn-success { background: var(--success); color: #ffffff; }
+
+/* Trạng thái nút bấm bị khóa khi không đủ quyền RBAC */
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Định dạng bảng dữ liệu chuẩn */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+/* Ô tiêu đề cột và ô dữ liệu của bảng */
+th, td {
+  padding: 10px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+/* Màu nền và chữ cho dòng tiêu đề bảng */
+th {
+  background: #f0f6ff;
+  font-weight: 700;
+  color: #1e3a8a;
+  border-top: 1px solid #dbeafe;
+}
+
+/* Hiệu ứng đổi màu nền nhẹ khi di chuột qua dòng trong bảng */
+tr:hover td {
+  background: #f8fbff;
+}
+
+/* Nhãn phân loại thuốc (OTC/ETC) và cảnh báo hạn dùng */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Nhãn phân loại thuốc kê đơn ETC và thuốc không kê đơn OTC */
+.badge-etc { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-otc { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+
+/* 5 mức màu cảnh báo hạn sử dụng lô thuốc theo chuẩn GPP (UC-03) */
+.badge-red { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
+.badge-orange { background: var(--warning-bg); color: var(--warning); border: 1px solid #fcd34d; }
+.badge-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid #fde047; }
+.badge-green { background: var(--success-bg); color: var(--success); border: 1px solid #86efac; }
+.badge-locked { background: var(--locked-bg); color: var(--locked); border: 1px solid #94a3b8; }
+
+/* Bố cục chia lưới 2 cột, 3 cột và 4 cột cho biểu mẫu nhập liệu */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+/* Nhóm gồm nhãn (label) và ô nhập liệu (input/select) xếp dọc */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Định dạng nhãn của trường biểu mẫu */
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+/* Lớp nền mờ phủ toàn màn hình khi mở hộp thoại Popup / Modal */
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* Kích hoạt hiển thị hộp thoại Popup / Modal */
+.modal-backdrop.open {
+  display: flex;
+}
+
+/* Khung nội dung chính của cửa sổ Popup / Modal */
+.modal {
+  background: #ffffff;
+  border-radius: 12px;
+  max-width: 820px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid #bfdbfe;
+  box-shadow: 0 20px 25px -5px rgba(30, 58, 138, 0.18);
+}
+
+/* Thanh tiêu đề phía trên cùng của cửa sổ Popup / Modal */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  color: #1e3a8a;
+}
