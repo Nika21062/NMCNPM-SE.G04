@@ -42,12 +42,35 @@ app.get('/', (req, res) => {
   res.redirect('/screens/ban-le-pos/ban-le-pos.html');
 });
 
-/* Khởi động máy chủ HTTP lắng nghe trên cổng PORT */
-app.listen(PORT, () => {
-  console.log(`======================================================================`);
-  console.log(`HỆ THỐNG NHÀ THUỐC MINH TIẾN GPP ĐANG CHẠY TẠI: http://localhost:${PORT}`);
-  console.log(`1. Màn 1 - Bán lẻ Quầy POS (FEFO)   : http://localhost:${PORT}/screens/ban-le-pos/ban-le-pos.html`);
-  console.log(`2. Màn 2 - Nhập kho & Kiểm nhập GPP : http://localhost:${PORT}/screens/nhap-kho-gpp/nhap-kho-gpp.html`);
-  console.log(`3. Màn 3 - Thuốc & Cảnh báo Lô/Hạn  : http://localhost:${PORT}/screens/danh-muc-va-canh-bao-han/danh-muc-va-canh-bao-han.html`);
-  console.log(`======================================================================`);
-});
+/* Khởi động: tự tạo / cập nhật CSDL trên SQL Server trước, sau đó mới mở cổng HTTP */
+const { ensureDatabase, explainError } = require('./config/db-setup');
+
+async function startServer() {
+  try {
+    await ensureDatabase();
+  } catch (err) {
+    explainError(err);
+    console.error('[DB] Không thể khởi tạo CSDL -> web vẫn chạy nhưng các API sẽ báo lỗi cho tới khi kết nối được SQL Server.\n');
+  }
+
+  const server = app.listen(PORT, () => {
+    console.log(`======================================================================`);
+    console.log(`HỆ THỐNG NHÀ THUỐC MINH TIẾN GPP ĐANG CHẠY TẠI: http://localhost:${PORT}`);
+    console.log(`1. Màn 1 - Bán lẻ Quầy POS (FEFO)   : http://localhost:${PORT}/screens/ban-le-pos/ban-le-pos.html`);
+    console.log(`2. Màn 2 - Nhập kho & Kiểm nhập GPP : http://localhost:${PORT}/screens/nhap-kho-gpp/nhap-kho-gpp.html`);
+    console.log(`3. Màn 3 - Thuốc & Cảnh báo Lô/Hạn  : http://localhost:${PORT}/screens/danh-muc-va-canh-bao-han/danh-muc-va-canh-bao-han.html`);
+    console.log(`======================================================================`);
+  });
+
+  /* Báo lỗi dễ hiểu khi cổng đã bị chương trình khác (hoặc một cửa sổ npm start khác) chiếm */
+  server.on('error', err => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n[SERVER] Cổng ${PORT} đang được dùng (có thể bạn đã mở "npm start" ở cửa sổ khác).`);
+      console.error('         Tắt cửa sổ đó, hoặc đổi PORT=3001 trong file .env rồi chạy lại.\n');
+      process.exit(1);
+    }
+    throw err;
+  });
+}
+
+startServer();

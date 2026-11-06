@@ -3,8 +3,26 @@
 Web app gồm 3 màn hình: **Bán lẻ quầy POS (FEFO)**, **Nhập kho & Kiểm nhập GPP**, **Danh mục thuốc & Cảnh báo lô/hạn**.
 
 - Backend: Node.js + Express
-- CSDL: Microsoft SQL Server (bản Docker hoặc bản cài trên Windows đều chạy được)
+- CSDL: Microsoft SQL Server cài trên Windows (quản lý bằng SSMS)
 - Frontend: HTML / CSS / JavaScript thuần (server tự phục vụ, không cần build)
+
+---
+
+## Chạy nhanh (3 bước)
+
+```bash
+git clone https://github.com/Nika21062/NMCNPM-SE.G04.git
+cd NMCNPM-SE.G04
+npm install
+npm start
+```
+
+Lần đầu `npm start` sẽ:
+1. Tự tạo file `.env` (cấu hình kết nối).
+2. Kết nối thẳng vào SQL Server bằng **Windows Authentication** — giống khi bạn mở SSMS, **không cần tài khoản / mật khẩu**.
+3. **Tự tạo database `MinhTienPharmacyGPP` + dữ liệu mẫu** rồi mở web tại **http://localhost:3000**.
+
+Nếu báo lỗi kết nối → chỉ cần sửa **1 dòng `DB_SERVER`** trong file `.env` (xem mục 2) rồi chạy lại `npm start`.
 
 ---
 
@@ -13,104 +31,57 @@ Web app gồm 3 màn hình: **Bán lẻ quầy POS (FEFO)**, **Nhập kho & Ki�
 | Phần mềm | Ghi chú |
 |---|---|
 | [Node.js](https://nodejs.org) bản 18 trở lên (khuyên dùng bản LTS) | Kiểm tra: `node -v` |
-| SQL Server **một trong hai cách**: | |
-| &nbsp;&nbsp;• SQL Server 2019/2022 (Developer hoặc Express) + SSMS | Cách đa số thành viên dùng |
-| &nbsp;&nbsp;• Hoặc Docker Desktop | Xem mục 3B |
+| SQL Server 2019/2022 (Express hoặc Developer) + SSMS | Đã cài sẵn thì thôi |
+| ODBC Driver 17 hoặc 18 for SQL Server | Thường **đã có sẵn** khi cài SQL Server/SSMS. Nếu thiếu: [tải tại đây](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) |
 
 ---
 
-## 2. Tải code và cài thư viện
+## 2. Sửa tên máy chủ SQL Server (chỉ khi `npm start` báo lỗi kết nối)
 
-```bash
-git clone https://github.com/Nika21062/NMCNPM-SE.G04.git
-cd NMCNPM-SE.G04
-npm install
-copy .env.example .env      # macOS/Linux: cp .env.example .env
+1. Mở **SSMS**. Ở cửa sổ **Connect to Server**, nhìn ô **Server name**.
+2. Mở file `.env` trong thư mục dự án, sửa dòng `DB_SERVER` thành **y hệt** ô đó:
+
+```ini
+DB_AUTH=windows
+DB_SERVER=localhost\SQLEXPRESS
 ```
 
-Mở file `.env` vừa tạo và sửa cho đúng máy của bạn (xem mục 3).
-
----
-
-## 3. Cấu hình SQL Server
-
-> [!IMPORTANT]
-> Ứng dụng đăng nhập SQL Server bằng **SQL Server Authentication** (tài khoản + mật khẩu, ví dụ `sa`).
-> **Windows Authentication không dùng được** với thư viện Node.js này.
-
-### 3A. SQL Server cài trên Windows (dùng SSMS) — làm 1 lần duy nhất
-
-**Bước 1 – Bật chế độ đăng nhập bằng mật khẩu**
-1. Mở SSMS, đăng nhập bằng *Windows Authentication* như bình thường.
-2. Chuột phải vào tên server (dòng trên cùng ở Object Explorer) → **Properties** → **Security**.
-3. Chọn **SQL Server and Windows Authentication mode** → OK.
-
-**Bước 2 – Bật tài khoản `sa` và đặt mật khẩu**
-1. Object Explorer → **Security** → **Logins** → chuột phải `sa` → **Properties**.
-2. Trang *General*: nhập mật khẩu mới (ví dụ `Sqlserver123@`), bỏ tích *Enforce password policy* nếu muốn.
-3. Trang *Status*: **Login = Enabled** → OK.
-
-   *(Hoặc chạy lệnh: `ALTER LOGIN sa WITH PASSWORD = 'Sqlserver123@'; ALTER LOGIN sa ENABLE;`)*
-
-**Bước 3 – Bật TCP/IP**
-1. Mở **SQL Server Configuration Manager** (gõ tìm trong Start, tên kiểu `SQLServerManager16.msc` / `SQLServerManager15.msc`).
-2. **SQL Server Network Configuration** → **Protocols for MSSQLSERVER** (hoặc `SQLEXPRESS`) → **TCP/IP** → **Enable**.
-3. Nếu là bản **Express**: chuột phải TCP/IP → Properties → tab *IP Addresses* → kéo xuống **IPAll**: xóa ô *TCP Dynamic Ports*, đặt **TCP Port = 1433**.
-4. **SQL Server Services** → chuột phải **SQL Server (...)** → **Restart**.
-
-**Bước 4 – Sửa file `.env`**
-
-| Bạn cài bản | Cấu hình trong `.env` |
+| Ô "Server name" trong SSMS | Ghi vào `.env` |
 |---|---|
-| Developer / Standard (instance mặc định `MSSQLSERVER`) | `DB_SERVER=localhost`, `DB_PORT=1433`, `DB_INSTANCE=` (để trống) |
-| Express đã đặt cổng 1433 ở Bước 3 | Giống dòng trên |
-| Express **không** muốn đặt cổng | `DB_INSTANCE=SQLEXPRESS` và bật dịch vụ **SQL Server Browser** trong Configuration Manager |
+| `DESKTOP-ABC123\SQLEXPRESS` | `DB_SERVER=DESKTOP-ABC123\SQLEXPRESS` |
+| `localhost\SQLEXPRESS` hoặc `.\SQLEXPRESS` | `DB_SERVER=localhost\SQLEXPRESS` |
+| `DESKTOP-ABC123` hoặc `localhost` hoặc `.` | `DB_SERVER=localhost` |
 
-Luôn sửa `DB_USER` / `DB_PASSWORD` cho khớp tài khoản ở Bước 2.
+3. Chạy lại `npm start`.
 
-### 3B. SQL Server chạy bằng Docker
+> [!TIP]
+> Kiểm tra nhanh kết nối mà không cần mở web: `npm run db:check`
 
-```bash
-docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=Sqlserver123@" -p 1433:1433 --name sql1 -d mcr.microsoft.com/mssql/server:2022-latest
-```
-
-Những lần sau chỉ cần `docker start sql1`. File `.env` giữ nguyên mặc định là chạy được.
-
----
-
-## 4. Kiểm tra kết nối
-
-```bash
-npm run db:check
-```
-
-- Thấy `[OK] Kết nối thành công` là đã kết nối được.
-- Nếu báo lỗi, script sẽ in **gợi ý cách sửa** (sai mật khẩu, chưa bật TCP/IP, sai instance...).
+> [!NOTE]
+> Windows Authentication kết nối qua đường nội bộ (shared memory) nên **không cần** bật TCP/IP, không cần tài khoản `sa` hay mật khẩu.
+> Chỉ cần dịch vụ **SQL Server (SQLEXPRESS)** đang chạy (Win + R → `services.msc`).
 
 ---
 
-## 5. Tạo cơ sở dữ liệu + dữ liệu mẫu
+## 3. Database tự động cập nhật
 
-Chọn **một** trong hai cách:
+Mỗi lần `npm start`, hệ thống so sánh "dấu vân tay" của 2 file `database/01_schema_3nf_gpp.sql` và `database/02_seed_data_test.sql` với database đang có:
 
-**Cách 1 – Bằng lệnh (khuyên dùng, không cần mở SSMS):**
-```bash
-npm run db:init
-```
-
-**Cách 2 – Bằng SSMS:** mở file [`database/00_full_setup_ssms.sql`](database/00_full_setup_ssms.sql) → bấm **Execute (F5)**.
-File này đã gộp sẵn tạo bảng + dữ liệu mẫu.
+| Tình huống | Hệ thống tự làm |
+|---|---|
+| Chưa có database | Tự tạo bảng + dữ liệu mẫu |
+| Ai đó sửa file SQL, bạn `git pull` về | Tự tạo lại database theo file mới |
+| File SQL không đổi | Giữ nguyên database, chạy luôn |
 
 > [!WARNING]
-> Cả hai cách đều **XÓA và tạo lại** database `MinhTienPharmacyGPP`. Dữ liệu đã nhập thêm sẽ mất.
+> Khi tự tạo lại, dữ liệu bạn nhập tay khi test sẽ được thay bằng dữ liệu mẫu.
+> Muốn giữ dữ liệu: đặt `DB_AUTO_REBUILD=false` trong `.env` (khi đó tự chạy `npm run db:init` lúc muốn cập nhật).
+
+Muốn chạy SQL bằng tay trong SSMS: mở [`database/00_full_setup_ssms.sql`](database/00_full_setup_ssms.sql) → **Execute (F5)** (file gộp sẵn tạo bảng + dữ liệu mẫu).
 
 ---
 
-## 6. Chạy ứng dụng
-
-```bash
-npm start
-```
+## 4. Sử dụng
 
 Mở trình duyệt: **http://localhost:3000**
 
@@ -120,7 +91,7 @@ Mở trình duyệt: **http://localhost:3000**
 | Nhập kho & Kiểm nhập GPP | http://localhost:3000/screens/nhap-kho-gpp/nhap-kho-gpp.html |
 | Danh mục & Cảnh báo lô/hạn | http://localhost:3000/screens/danh-muc-va-canh-bao-han/danh-muc-va-canh-bao-han.html |
 
-### Tài khoản mẫu
+### Tài khoản mẫu (đăng nhập trong web)
 
 | Vai trò | Tên đăng nhập | Mật khẩu | Quyền |
 |---|---|---|---|
@@ -132,23 +103,23 @@ Mở trình duyệt: **http://localhost:3000**
 
 ---
 
-## 7. Các lệnh npm
+## 5. Các lệnh npm
 
 | Lệnh | Tác dụng |
 |---|---|
-| `npm start` | Chạy web server |
+| `npm start` | Tự tạo/cập nhật database rồi chạy web |
 | `npm run db:check` | Kiểm tra kết nối SQL Server và số dòng dữ liệu |
-| `npm run db:init` | Tạo lại database + dữ liệu mẫu |
+| `npm run db:init` | Ép tạo lại database + dữ liệu mẫu ngay |
 | `npm run db:bundle` | Tạo lại file `00_full_setup_ssms.sql` sau khi sửa `01_...sql` hoặc `02_...sql` |
 
 ---
 
-## 8. Cấu trúc thư mục
+## 6. Cấu trúc thư mục
 
 ```
-code/
 ├── backend/
-│   ├── config/db.js          # Kết nối SQL Server (đọc từ .env)
+│   ├── config/db.js          # Kết nối SQL Server (Windows Authentication, đọc từ .env)
+│   ├── config/db-setup.js    # Tự tạo / cập nhật database khi khởi động
 │   ├── routes/               # API cho đăng nhập + 3 màn hình
 │   ├── utils/permission.js   # Kiểm tra đăng nhập & quyền admin/user
 │   └── server.js
@@ -158,18 +129,18 @@ code/
 │   └── 02_seed_data_test.sql    # Dữ liệu mẫu kiểm thử
 ├── frontend/                 # Giao diện 3 màn hình
 ├── scripts/db-tools.js       # Lệnh db:check / db:init / db:bundle
-├── .env.example              # Mẫu cấu hình (copy thành .env)
+├── .env.example              # Mẫu cấu hình (tự copy thành .env)
 └── package.json
 ```
 
 ---
 
-## 9. Lỗi thường gặp
+## 7. Lỗi thường gặp
 
 | Thông báo | Cách xử lý |
 |---|---|
-| `Login failed for user 'sa'` | Sai mật khẩu trong `.env`, hoặc chưa làm Bước 1–2 mục 3A |
-| `Failed to connect ... ECONNREFUSED` / `ETIMEOUT` | Chưa bật TCP/IP (Bước 3), SQL Server chưa chạy, hoặc container Docker đang tắt (`docker start sql1`) |
-| `EINSTLOOKUP` | Đặt `DB_INSTANCE=SQLEXPRESS` nhưng chưa bật dịch vụ SQL Server Browser → bật dịch vụ hoặc cố định cổng 1433 |
-| `Port 3000 is already in use` | Đổi `PORT=3001` trong `.env` |
-| Tiếng Việt bị lỗi font khi chạy SQL bằng SSMS | Dùng file `00_full_setup_ssms.sql` (đã lưu UTF-8 BOM) hoặc dùng `npm run db:init` |
+| `Error Locating Server/Instance Specified` | Sai `DB_SERVER` → copy lại đúng ô Server name trong SSMS (mục 2), hoặc dịch vụ SQL Server chưa chạy (`services.msc` → **SQL Server (SQLEXPRESS)** → Start) |
+| `Login failed for user 'DESKTOP-...\...'` | Tài khoản Windows đang dùng chưa có quyền trên SQL Server → mở SSMS, vào Security → Logins, thêm tài khoản Windows đó với quyền `sysadmin` |
+| `Data source name not found and no default driver` | Thiếu ODBC Driver → cài *ODBC Driver 18 for SQL Server* (link ở mục 1) |
+| `Không nạp được driver msnodesqlv8` | Chạy lại `npm install` |
+| `Cổng 3000 đang được dùng` | Tắt cửa sổ `npm start` cũ, hoặc đổi `PORT=3001` trong `.env` |
