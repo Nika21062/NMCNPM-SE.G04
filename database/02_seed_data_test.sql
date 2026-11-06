@@ -127,8 +127,8 @@ VALUES
 -- LO-05: Đã quá hạn (2026-10-10) -> XÁM (KHOA_HET_HAN) - Dùng để test chặn bán 100% ở POS và Xuất hủy ở Màn 1
 (5, 'LO-05', N'DRG01', N'PND-EXP01', '2024-05-01', '2026-10-10', '2024-05-20', 24,  N'Viên', 1450,  'KHOA_HET_HAN'),
 
--- LO-06: Lô thứ 2 của Augmentin (XANH) để test tách lô FEFO cho thuốc ETC
-(6, 'LO-06', N'DRG02', N'AUG-2508',  '2025-08-01', '2027-08-15', '2025-08-20', 70,  N'Viên', 12000, 'KHA_DUNG'),
+-- LO-06: Lô thuộc phiếu chờ kiểm nhập PNK-202610-002 (chưa cộng tồn kho theo BR-INV-02; khi Chủ NT bấm Duyệt sẽ cộng +70 viên và chuyển sang KHA_DUNG)
+(6, 'LO-06', N'DRG02', N'AUG-2508',  '2025-08-01', '2027-08-15', '2025-08-20', 0,   N'Viên', 10357.14, 'CHO_DUYET_NHAP'),
 
 -- LO-07: Berberin BM 100mg (XANH)
 (7, 'LO-07', N'DRG04', N'BER-2509',  '2025-09-01', '2027-09-10', '2025-09-15', 400, N'Viên', 350,   'KHA_DUNG'),

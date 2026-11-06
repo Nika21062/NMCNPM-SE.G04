@@ -41,7 +41,7 @@ router.get('/data', async (req, res) => {
     `;
     if (searchKeyword) {
       drugReq.input('ten_tk', sql.NVarChar(300), `%${searchKeyword}%`);
-      drugQuery += ` AND ten_thuoc LIKE @ten_tk `;
+      drugQuery += ` AND (ten_thuoc LIKE @ten_tk OR hoat_chat LIKE @ten_tk OR ma_vach_barcode LIKE @ten_tk OR ma_thuoc LIKE @ten_tk) `;
     }
     drugQuery += ` ORDER BY ma_thuoc ASC; `;
 

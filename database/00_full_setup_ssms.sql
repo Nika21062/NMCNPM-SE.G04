@@ -118,12 +118,12 @@ CREATE TABLE tbl_lo_thuoc (
     so_lo                   NVARCHAR(50)  NOT NULL,
     han_dung                DATE          NOT NULL,
     ngay_san_xuat           DATE          NULL,
-    ngay_nhap_kho           DATE          NOT NULL DEFAULT CAST(GETDATE() AS DATE),
+    ngay_nhap_kho           DATE          NOT NULL DEFAULT CAST(DATEADD(HOUR, 7, SYSUTCDATETIME()) AS DATE),
     so_luong_ton            INT           NOT NULL DEFAULT 0, -- Luôn lưu theo ĐVT cơ bản nhỏ nhất
     don_vi_co_ban           NVARCHAR(30)  NOT NULL,
     gia_von_nhap            DECIMAL(18,2) NOT NULL DEFAULT 0,
     trang_thai_lo           VARCHAR(20)   NOT NULL DEFAULT 'KHA_DUNG',
-    so_ngay_con_lai         AS (DATEDIFF(day, CAST(GETDATE() AS DATE), han_dung)),
+    so_ngay_con_lai         AS (DATEDIFF(day, CAST(DATEADD(HOUR, 7, SYSUTCDATETIME()) AS DATE), han_dung)),
     CONSTRAINT pk_lo_thuoc PRIMARY KEY (ma_lo),
     CONSTRAINT uq_lo_thuoc_so_lo UNIQUE (ma_thuoc, so_lo, han_dung),
     CONSTRAINT fk_lo_thuoc_dm FOREIGN KEY (ma_thuoc) REFERENCES tbl_dm_thuoc(ma_thuoc),
@@ -170,7 +170,7 @@ CREATE TABLE tbl_phieu_nhap_kho (
     so_hoa_don_vat          VARCHAR(50)   NOT NULL,
     ngay_hoa_don            DATE          NOT NULL,
     file_chung_tu_url       NVARCHAR(255) NULL,
-    ngay_gio_lap            DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    ngay_gio_lap            DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ma_nhan_vien_lap        INT           NOT NULL,
     ma_quan_ly_duyet        INT           NULL,
     kenh_phe_duyet          VARCHAR(20)   NULL,
@@ -226,7 +226,7 @@ CREATE TABLE tbl_hoa_don_ban_le (
     ma_hoa_don              BIGINT IDENTITY(1,1) NOT NULL,
     so_hoa_don              VARCHAR(30)   NULL,
     ma_nhan_vien            INT           NOT NULL,
-    ngay_ban                DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    ngay_ban                DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ten_khach_hang          NVARCHAR(100) NULL,
     ma_don_thuoc_etc        VARCHAR(50)   NULL,
     bac_si_ke_don           NVARCHAR(150) NULL, -- Bắt buộc nhập trên POS khi có thuốc ETC (R05)
@@ -275,7 +275,7 @@ CREATE TABLE tbl_phieu_xuat_kho (
     ma_phieu_xuat           BIGINT IDENTITY(1,1) NOT NULL,
     so_phieu_xuat           VARCHAR(30)   NOT NULL UNIQUE,
     loai_xuat               VARCHAR(30)   NOT NULL, -- 'XUAT_HUY_HET_HAN', 'XUAT_TRA_NCC'
-    ngay_lap                DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    ngay_lap                DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ma_nhan_vien_lap        INT           NOT NULL,
     ma_quan_ly_duyet        INT           NULL,
     ly_do_xuat              NVARCHAR(500) NOT NULL,
@@ -309,7 +309,7 @@ GO
 -- =========================================================================================
 CREATE TABLE tbl_nhat_ky_he_thong (
     ma_log                  BIGINT IDENTITY(1,1) NOT NULL,
-    thoi_gian               DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    thoi_gian               DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ma_nguoi_dung           INT           NULL,
     hanh_dong               VARCHAR(50)   NOT NULL,
     bang_tac_dong           VARCHAR(50)   NOT NULL,
@@ -512,8 +512,8 @@ VALUES
 -- LO-05: Đã quá hạn (2026-10-10) -> XÁM (KHOA_HET_HAN) - Dùng để test chặn bán 100% ở POS và Xuất hủy ở Màn 1
 (5, 'LO-05', N'DRG01', N'PND-EXP01', '2024-05-01', '2026-10-10', '2024-05-20', 24,  N'Viên', 1450,  'KHOA_HET_HAN'),
 
--- LO-06: Lô thứ 2 của Augmentin (XANH) để test tách lô FEFO cho thuốc ETC
-(6, 'LO-06', N'DRG02', N'AUG-2508',  '2025-08-01', '2027-08-15', '2025-08-20', 70,  N'Viên', 12000, 'KHA_DUNG'),
+-- LO-06: Lô thuộc phiếu chờ kiểm nhập PNK-202610-002 (chưa cộng tồn kho theo BR-INV-02; khi Chủ NT bấm Duyệt sẽ cộng +70 viên và chuyển sang KHA_DUNG)
+(6, 'LO-06', N'DRG02', N'AUG-2508',  '2025-08-01', '2027-08-15', '2025-08-20', 0,   N'Viên', 10357.14, 'CHO_DUYET_NHAP'),
 
 -- LO-07: Berberin BM 100mg (XANH)
 (7, 'LO-07', N'DRG04', N'BER-2509',  '2025-09-01', '2027-09-10', '2025-09-15', 400, N'Viên', 350,   'KHA_DUNG'),

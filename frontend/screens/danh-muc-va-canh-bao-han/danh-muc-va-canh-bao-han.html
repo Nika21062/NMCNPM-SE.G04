@@ -82,8 +82,10 @@
             <!-- /* Thanh công cụ tìm kiếm thuốc và nút mở Modal thêm thuốc mới */ -->
             <div class="toolbar">
               <input
-                type="text"
+                type="search"
                 id="searchDrugInput"
+                name="gpp_search_drug_catalog"
+                autocomplete="off"
                 placeholder="Tìm tên thuốc, hoạt chất, mã vạch..."
                 oninput="renderDrugTable()"
                 style="width: 260px;"
@@ -121,23 +123,30 @@
             <!-- /* Thanh công cụ tìm kiếm lô thuốc và nút lập phiếu Xuất hủy / Trả NCC */ -->
             <div class="toolbar">
               <input
-                type="text"
+                type="search"
                 id="searchLotInput"
+                name="gpp_search_lot_inventory"
+                autocomplete="off"
                 placeholder="Tìm kiếm mã lô, số lô, tên thuốc..."
                 oninput="renderLotTable()"
-                style="width: 240px;"
+                style="width: 220px;"
               />
-              <button type="button" class="btn btn-danger" onclick="createDestroyNoteFromExpired()">
+              <select id="exportTypeSelect" style="width: 195px;" title="Chọn hình thức xuất phi thương mại">
+                <option value="XUAT_HUY_HET_HAN">Xuất hủy thuốc hết hạn GPP</option>
+                <option value="XUAT_TRA_NCC">Xuất trả Nhà cung cấp GDP</option>
+              </select>
+              <button type="button" class="btn btn-danger" id="btnDestroyExpired" onclick="createDestroyNoteFromExpired()">
                 Xuất hủy / Trả NCC các lô Quá hạn &amp; Nguy cấp
               </button>
             </div>
           </div>
 
-          <!-- /* Bộ nút lọc nhanh theo 5 mức cảnh báo hạn sử dụng chuẩn GPP */ -->
+          <!-- /* Bộ nút lọc nhanh theo các mốc cảnh báo hạn sử dụng chuẩn GPP (30 / 60 / 90 / 180 ngày) */ -->
           <div class="filter-pills">
             <button type="button" class="pill pill-all active" onclick="filterLots('ALL', this)">Tất cả lô</button>
             <button type="button" class="pill pill-red" onclick="filterLots('RED', this)">Nguy cấp &le; 30 ngày</button>
-            <button type="button" class="pill pill-orange" onclick="filterLots('ORANGE', this)">Cận hạn 31–90 ngày</button>
+            <button type="button" class="pill pill-orange" onclick="filterLots('ORANGE_60', this)">Cận hạn 31–60 ngày</button>
+            <button type="button" class="pill pill-orange" onclick="filterLots('ORANGE_90', this)">Cận hạn 61–90 ngày</button>
             <button type="button" class="pill pill-yellow" onclick="filterLots('YELLOW', this)">Theo dõi 91–180 ngày</button>
             <button type="button" class="pill pill-green" onclick="filterLots('GREEN', this)">An toàn &gt; 180 ngày</button>
             <button type="button" class="pill pill-locked" onclick="filterLots('LOCKED', this)">Đã khóa hết hạn</button>
@@ -147,6 +156,14 @@
           <table>
             <thead>
               <tr>
+                <th style="width: 44px; text-align: center;">
+                  <input
+                    type="checkbox"
+                    id="chkSelectAllLots"
+                    onchange="toggleSelectAllDestroyLots(this.checked)"
+                    title="Chọn / Bỏ chọn tất cả lô quá hạn &amp; nguy cấp (&le; 30 ngày)"
+                  />
+                </th>
                 <th>Mã Lô / Số Lô</th>
                 <th>Thuốc</th>
                 <th>Hạn sử dụng</th>
@@ -190,7 +207,7 @@
       </div>
 
       <!-- /* Hàng 2: Số đăng ký, Phân loại thuốc, Tồn tối thiểu */ -->
-      <div class="grid-3" style="margin-bottom: 16px;">
+      <div class="grid-3" style="margin-bottom: 12px;">
         <div class="form-group">
           <label for="mdlSdk">Số đăng ký *</label>
           <input type="text" id="mdlSdk" placeholder="VD: VD-29102-18" />
@@ -206,6 +223,22 @@
         <div class="form-group">
           <label for="mdlMinStock">Tồn tối thiểu</label>
           <input type="number" id="mdlMinStock" placeholder="VD: 50" min="0" />
+        </div>
+      </div>
+
+      <!-- /* Hàng 3: Hàm lượng, Dạng bào chế, Vị trí tủ quầy GPP */ -->
+      <div class="grid-3" style="margin-bottom: 16px;">
+        <div class="form-group">
+          <label for="mdlStrength">Hàm lượng</label>
+          <input type="text" id="mdlStrength" placeholder="VD: 100mg" />
+        </div>
+        <div class="form-group">
+          <label for="mdlDosageForm">Dạng bào chế</label>
+          <input type="text" id="mdlDosageForm" placeholder="VD: Viên nén bao phim" />
+        </div>
+        <div class="form-group">
+          <label for="mdlShelfLocation">Vị trí tủ / kệ GPP</label>
+          <input type="text" id="mdlShelfLocation" placeholder="VD: Tủ A - Kệ 2 - Ngăn 1" />
         </div>
       </div>
 
@@ -246,6 +279,75 @@
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
         <button type="button" class="btn btn-outline" onclick="closeDrugModal()">Hủy</button>
         <button type="button" class="btn btn-primary" onclick="saveNewDrug()">Lưu thuốc &amp; giá bán</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- /* =====================================================================
+       MODAL CHỌN SỐ LÔ & XÁC NHẬN XUẤT HỦY / TRẢ NHÀ CUNG CẤP
+       ===================================================================== */ -->
+  <div class="modal-backdrop" id="destroyLotModal">
+    <div class="modal" style="max-width: 780px;">
+      <div class="modal-header">
+        <h3>Chọn Số Lô &amp; Xác nhận Xuất hủy / Trả Nhà cung cấp</h3>
+        <button type="button" class="btn btn-outline" onclick="closeDestroyLotModal()">Đóng &times;</button>
+      </div>
+
+      <p style="margin: 0 0 12px; font-size: 13px; color: var(--muted);">
+        Vui lòng <strong>tích chọn cụ thể các Số lô</strong> quá hạn hoặc cận hạn nguy cấp (&le; 30 ngày) cần xuất khỏi kho và xác nhận thông tin bên dưới:
+      </p>
+
+      <div class="grid-3" style="margin-bottom: 12px; grid-template-columns: 1fr 2fr;">
+        <div class="form-group">
+          <label for="mdlExportType">Hình thức xuất phi thương mại *</label>
+          <select id="mdlExportType">
+            <option value="XUAT_HUY_HET_HAN">Xuất hủy thuốc hết hạn GPP</option>
+            <option value="XUAT_TRA_NCC">Xuất trả Nhà cung cấp GDP</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mdlExportReason">Lý do xuất hủy / trả NCC *</label>
+          <input
+            type="text"
+            id="mdlExportReason"
+            placeholder="Nhập lý do thu hồi, tiêu hủy hoặc đổi trả nhà cung cấp..."
+          />
+        </div>
+      </div>
+
+      <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 44px; text-align: center;">
+                <input
+                  type="checkbox"
+                  id="chkModalSelectAllLots"
+                  onchange="toggleModalSelectAllLots(this.checked)"
+                  title="Chọn / Bỏ chọn tất cả lô trong danh sách"
+                />
+              </th>
+              <th>Mã Lô / Số Lô</th>
+              <th>Tên thuốc</th>
+              <th>Hạn dùng</th>
+              <th>Còn lại</th>
+              <th>Tồn xuất</th>
+            </tr>
+          </thead>
+          <tbody id="destroyModalLotBody"></tbody>
+        </table>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+        <div id="destroySelectedSummary" style="font-size: 13px; font-weight: 600; color: var(--danger);">
+          Đã chọn: 0 lô thuốc
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-outline" onclick="closeDestroyLotModal()">Hủy bỏ</button>
+          <button type="button" class="btn btn-danger" onclick="confirmAndSubmitDestroyLots()">
+            ✓ Xác nhận Xuất &amp; Trừ tồn kho
+          </button>
+        </div>
       </div>
     </div>
   </div>

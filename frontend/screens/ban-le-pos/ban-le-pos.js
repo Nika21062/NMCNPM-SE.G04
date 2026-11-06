@@ -125,6 +125,17 @@ function allocateFefoForDrug(drug, neededBaseQty) {
   return { ok: true, totalAvail, allocations };
 }
 
+/* Hàm matchesPosSearchKeyword: Kiểm tra thuốc khớp từ khóa tìm kiếm theo Tên thuốc, Hoạt chất, Mã vạch Barcode hoặc Mã thuốc */
+function matchesPosSearchKeyword(drug, kw) {
+  if (!kw) return true;
+  return (
+    (drug.name || '').toLowerCase().includes(kw) ||
+    (drug.ingredient || '').toLowerCase().includes(kw) ||
+    (drug.barcode || '').toLowerCase().includes(kw) ||
+    (drug.id || '').toLowerCase().includes(kw)
+  );
+}
+
 /* Hàm searchPosProducts: Truy vấn trực tiếp SQL Server theo tham số ?search= khi bấm nút Tìm kiếm; nếu xóa trống sẽ tải lại toàn bộ danh sách sản phẩm */
 async function searchPosProducts() {
   const inputEl = document.getElementById('posSearchInput');
@@ -136,11 +147,11 @@ async function searchPosProducts() {
   if (!currentSearchKeyword) {
     showToast(`Đã truy vấn và hiển thị trở lại toàn bộ danh sách (${drugs.length} sản phẩm) trong CSDL!`, 'success');
   } else {
-    const matchedCount = drugs.filter(d => d.name.toLowerCase().includes(currentSearchKeyword)).length;
-    if (matchedCount === 0) {
-      showToast(`Không tìm thấy sản phẩm nào có tên chứa "${rawKeyword}" trong CSDL!`, 'warning');
+    const matchedDrugs = drugs.filter(d => matchesPosSearchKeyword(d, currentSearchKeyword));
+    if (matchedDrugs.length === 0) {
+      showToast(`Không tìm thấy sản phẩm nào khớp từ khóa / mã vạch "${rawKeyword}" trong CSDL!`, 'warning');
     } else {
-      showToast(`Tìm thấy ${matchedCount} sản phẩm khớp tên "${rawKeyword}" từ CSDL.`, 'success');
+      showToast(`Tìm thấy ${matchedDrugs.length} sản phẩm khớp "${rawKeyword}" từ CSDL.`, 'success');
     }
   }
 }
@@ -151,9 +162,9 @@ function renderPosProductList() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  /* Lọc theo đúng tên sản phẩm (ten_thuoc) nếu có từ khóa tìm kiếm, nếu rỗng thì lấy toàn bộ sản phẩm trong DB */
+  /* Lọc theo tên thuốc, hoạt chất, mã vạch barcode hoặc mã thuốc nếu có từ khóa tìm kiếm */
   const filteredDrugs = currentSearchKeyword
-    ? drugs.filter(d => d.name.toLowerCase().includes(currentSearchKeyword))
+    ? drugs.filter(d => matchesPosSearchKeyword(d, currentSearchKeyword))
     : drugs;
 
   if (filteredDrugs.length === 0) {
@@ -309,7 +320,7 @@ function onProductRowQtyChange(drugId, newQtyValue) {
   updatePosOrderSummary();
 }
 
-/* Hàm addProductRowToCart: Thêm sản phẩm từ danh sách DB vào Giỏ hàng POS và hiển thị SOP tư vấn */
+/* Hàm addProductRowToCart: Thêm sản phẩm từ danh sách DB vào Giỏ hàng POS (cộng dồn nếu bấm thêm lại cùng ĐVT) và hiển thị SOP tư vấn */
 function addProductRowToCart(drugId) {
   const drug = drugs.find(d => d.id === drugId);
   if (!drug) return;
@@ -321,7 +332,16 @@ function addProductRowToCart(drugId) {
     qty: 1
   };
   const unitObj = drug.units.find(u => u.unitName === rowState.unitName) || drug.units[0];
-  const neededBaseQty = rowState.qty * unitObj.rate;
+  const existing = posCart.find(item => item.drugId === drugId);
+
+  /* Nếu thuốc đã có trong giỏ hàng với cùng ĐVT và người dùng bấm "+ Thêm" tiếp thì cộng dồn +1 */
+  const targetQty = existing
+    ? (existing.unitName === rowState.unitName && existing.qty === rowState.qty
+        ? existing.qty + 1
+        : rowState.qty)
+    : rowState.qty;
+
+  const neededBaseQty = targetQty * unitObj.rate;
   const fefoCheck = allocateFefoForDrug(drug, neededBaseQty);
 
   if (!fefoCheck.ok) {
@@ -329,18 +349,22 @@ function addProductRowToCart(drugId) {
     return;
   }
 
-  const existing = posCart.find(item => item.drugId === drugId);
+  productRowSelections[drugId] = {
+    unitName: rowState.unitName,
+    qty: targetQty
+  };
+
   if (existing) {
     existing.unitName = rowState.unitName;
-    existing.qty = rowState.qty;
-    showToast(`Đã cập nhật ${drug.name} (${existing.qty} ${existing.unitName}) trong Giỏ hàng!`, 'success');
+    existing.qty = targetQty;
+    showToast(`Đã cập nhật ${drug.name} (${existing.qty} ${existing.unitName}) trong Giỏ hàng -> Lô FEFO: ${fefoCheck.allocations[0].batchNo}`, 'success');
   } else {
     posCart.push({
       drugId: drug.id,
       unitName: rowState.unitName,
-      qty: rowState.qty
+      qty: targetQty
     });
-    showToast(`Đã thêm ${drug.name} (${rowState.qty} ${rowState.unitName}) vào Giỏ hàng -> Lô FEFO: ${fefoCheck.allocations[0].batchNo}`, 'success');
+    showToast(`Đã thêm ${drug.name} (${targetQty} ${rowState.unitName}) vào Giỏ hàng -> Lô FEFO: ${fefoCheck.allocations[0].batchNo}`, 'success');
   }
 
   renderPosProductList();

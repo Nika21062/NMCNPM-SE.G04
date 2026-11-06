@@ -65,8 +65,10 @@ function getLotAlertInfo(expDateStr, lotObj = null) {
     return { code: 'LOCKED', label: 'Đã khóa hết hạn', badge: 'badge-locked', days };
   } else if (days <= 30) {
     return { code: 'RED', label: 'Nguy cấp <= 30 ngày', badge: 'badge-red', days };
+  } else if (days <= 60) {
+    return { code: 'ORANGE', label: 'Cận hạn 31-60 ngày (Mốc 60d)', badge: 'badge-orange', days };
   } else if (days <= 90) {
-    return { code: 'ORANGE', label: 'Cận hạn 31-90 ngày', badge: 'badge-orange', days };
+    return { code: 'ORANGE', label: 'Cận hạn 61-90 ngày (Mốc 90d)', badge: 'badge-orange', days };
   } else if (days <= 180) {
     return { code: 'YELLOW', label: 'Theo dõi 91-180 ngày', badge: 'badge-yellow', days };
   }
@@ -146,11 +148,11 @@ function ensureRbacLoginModal() {
       </div>
       <div class="form-group" style="margin-bottom:12px;">
         <label for="rbacLoginUsername">Tên đăng nhập (*)</label>
-        <input type="text" id="rbacLoginUsername" placeholder="Nhập tên đăng nhập..." autocomplete="off" onkeydown="if(event.key==='Enter') document.getElementById('rbacLoginPassword').focus()" />
+        <input type="text" id="rbacLoginUsername" name="gpp_rbac_user_nofill" placeholder="Nhập tên đăng nhập..." autocomplete="off" data-lpignore="true" onkeydown="if(event.key==='Enter') document.getElementById('rbacLoginPassword').focus()" />
       </div>
       <div class="form-group" style="margin-bottom:12px;">
         <label for="rbacLoginPassword">Mật khẩu (*)</label>
-        <input type="password" id="rbacLoginPassword" placeholder="Nhập mật khẩu..." autocomplete="off" onkeydown="if(event.key==='Enter') submitRbacLoginModal()" />
+        <input type="text" id="rbacLoginPassword" name="gpp_rbac_pass_nofill" style="-webkit-text-security: disc;" placeholder="Nhập mật khẩu..." autocomplete="new-password" data-lpignore="true" onkeydown="if(event.key==='Enter') submitRbacLoginModal()" />
       </div>
       <div id="rbacLoginError" style="display:none; color:var(--danger); background:#fef2f2; border:1px solid #fca5a5; padding:8px 10px; border-radius:6px; font-size:12px; font-weight:600; margin-bottom:12px;"></div>
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
@@ -293,10 +295,40 @@ async function syncAuthRolesFromDb() {
   applyUserToRoleUI(getCurrentUser(), true);
 }
 
+/* Hàm preventBrowserAutofillOnInputs: Chặn trình duyệt tự động điền tên đăng nhập đã lưu (chunhathuoc/duocsi01) vào các ô tìm kiếm và ô nhập liệu */
+function preventBrowserAutofillOnInputs() {
+  const knownUsernames = new Set(['chunhathuoc', 'duocsi01', 'duocsi02']);
+  const searchIds = ['posSearchInput', 'searchReceiptHistoryInput', 'searchDrugInput', 'searchLotInput'];
+
+  document.querySelectorAll('input[type="text"], input[type="search"], input[type="number"]').forEach((inp) => {
+    if (inp.id === 'rbacLoginUsername' || inp.id === 'rbacLoginPassword') return;
+    inp.setAttribute('autocomplete', 'off');
+    inp.setAttribute('data-lpignore', 'true');
+    inp.setAttribute('data-form-type', 'other');
+  });
+
+  const cleanUpSearchInputs = () => {
+    searchIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const val = (el.value || '').trim().toLowerCase();
+      if (knownUsernames.has(val)) {
+        el.value = '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  };
+
+  cleanUpSearchInputs();
+  setTimeout(cleanUpSearchInputs, 120);
+  setTimeout(cleanUpSearchInputs, 400);
+}
+
 /* Hàm initCommonRoleSwitcher: Khởi tạo bộ chuyển đổi vai trò RBAC ở góc dưới bên trái Sidebar */
 function initCommonRoleSwitcher(onRoleChangeCallback) {
   gppRoleChangeCallback = onRoleChangeCallback;
   ensureRbacLoginModal();
+  preventBrowserAutofillOnInputs();
 
   const roleSelect = document.getElementById('currentRole');
   if (roleSelect) {

@@ -17,6 +17,61 @@ let receipts = [];
 let importDraftLines = [];
 let importState = 'NHAP_NHAP';
 
+/* Hàm getOffsetIsoDate: Trả về chuỗi ngày YYYY-MM-DD lệch offsetDays ngày so với ngày hiện tại (giờ địa phương) */
+function getOffsetIsoDate(offsetDays = 0) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offsetDays);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/* Hàm initDefaultImportDates: Thiết lập giá trị mặc định chuẩn GPP cho Ngày hóa đơn, Ngày sản xuất (< hôm nay) và Hạn sử dụng (>= 180 ngày) */
+function initDefaultImportDates(forceReset = false) {
+  const todayStr = getOffsetIsoDate(0);
+  const yesterdayStr = getOffsetIsoDate(-1);
+  const tomorrowStr = getOffsetIsoDate(1);
+  const defaultMfgStr = getOffsetIsoDate(-30);   // Mặc định NSX: 30 ngày trước hôm nay (< ngày hiện tại)
+  const defaultExpStr = getOffsetIsoDate(365);   // Mặc định HSD: +365 ngày (>= 180 ngày chuẩn GPP)
+
+  const invDateEl = document.getElementById('impInvoiceDate');
+  const mfgEl = document.getElementById('impMfgDate');
+  const expEl = document.getElementById('impExpDate');
+
+  if (invDateEl) {
+    invDateEl.max = todayStr;
+    if (forceReset || !invDateEl.value) invDateEl.value = todayStr;
+  }
+  if (mfgEl) {
+    mfgEl.max = yesterdayStr;
+    if (forceReset || !mfgEl.value) mfgEl.value = defaultMfgStr;
+  }
+  if (expEl) {
+    expEl.min = tomorrowStr;
+    if (forceReset || !expEl.value) expEl.value = defaultExpStr;
+  }
+}
+
+/* Hàm onImportExpDateChange: Kiểm tra tức thời khi người dùng chọn Hạn sử dụng để hiển thị ngay ô Lý do duyệt đặc cách nếu < 180 ngày */
+function onImportExpDateChange() {
+  const expVal = document.getElementById('impExpDate')?.value;
+  const specialGroup = document.getElementById('specialReasonGroup');
+  if (!specialGroup) return;
+  const hasShortDraft = importDraftLines.some(l => l.isShortExpiry);
+  if (!expVal) {
+    specialGroup.style.display = hasShortDraft ? 'flex' : 'none';
+    return;
+  }
+  const daysLeft = diffDaysFromToday(expVal);
+  if (daysLeft > 0 && daysLeft < 180) {
+    specialGroup.style.display = 'flex';
+  } else {
+    specialGroup.style.display = hasShortDraft ? 'flex' : 'none';
+  }
+}
+
 /* Hàm loadScreen2Data: Tải trực tiếp dữ liệu Nhà cung cấp GDP, Danh mục thuốc và Lịch sử phiếu nhập từ API SQL Server */
 async function loadScreen2Data(silent = false) {
   const prevSupplier = document.getElementById('impSupplier')?.value;
@@ -244,6 +299,12 @@ function addImportLine() {
     return;
   }
 
+  const mfgDaysFromToday = diffDaysFromToday(mfg);
+  if (mfgDaysFromToday >= 0) {
+    showToast('Ngày sản xuất phải nhỏ hơn ngày hiện tại! Vui lòng kiểm tra lại ngày sản xuất.', 'error');
+    return;
+  }
+
   const daysLeft = diffDaysFromToday(exp);
   if (daysLeft <= 0 || new Date(exp) <= new Date(mfg)) {
     showToast('Hạn sử dụng phải lớn hơn ngày sản xuất và ngày nhập kho hiện tại! Tuyệt đối cấm nhập thuốc hết hạn.', 'error');
@@ -275,15 +336,14 @@ function addImportLine() {
     isShortExpiry
   });
 
-  /* Xóa trống các ô nhập lô sau khi thêm dòng */
+  /* Đặt lại các ô nhập lô về mặc định chuẩn GPP sau khi thêm dòng */
   document.getElementById('impDrugSelect').value = '';
   onImportDrugChange();
   document.getElementById('impQty').value = '';
   document.getElementById('impBaseQtyPreview').value = '';
   document.getElementById('impBatchNo').value = '';
-  document.getElementById('impMfgDate').value = '';
-  document.getElementById('impExpDate').value = '';
   document.getElementById('impPrice').value = '';
+  initDefaultImportDates(true);
 
   renderImportLines();
   showToast(`Đã thêm lô ${batchNo} (${qty} ${unitName} = +${qty * unitObj.rate} ${drug.baseUnit}) vào dự thảo phiếu nhập.`, 'success');
@@ -339,12 +399,12 @@ function resetImportHeaderForm() {
 
   if (supEl) supEl.value = '';
   if (invNoEl) invNoEl.value = '';
-  if (invDateEl) invDateEl.value = '';
   if (fileEl) fileEl.value = '';
   if (reasonEl) reasonEl.value = '';
   if (chk1El) chk1El.checked = false;
   if (chk2El) chk2El.checked = false;
   if (chk3El) chk3El.checked = false;
+  initDefaultImportDates(true);
 }
 
 /* Hàm submitForInspection: Bước 1 (Dược sĩ) xác nhận đủ 3 mục Checklist cảm quan GPP và lưu phiếu vào SQL Server */
@@ -650,6 +710,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (btnQuickAddUnit) btnQuickAddUnit.disabled = !canEditPrice;
     renderImportReceiptsHistory();
   });
+  initDefaultImportDates(true);
   loadScreen2Data();
   registerAutoDbSync(loadScreen2Data);
 });

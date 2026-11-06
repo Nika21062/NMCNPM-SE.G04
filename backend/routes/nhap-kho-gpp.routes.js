@@ -11,18 +11,128 @@ const router = express.Router();
 const { sql, getPool } = require('../config/db');
 const { requireUser } = require('../utils/permission');
 
-/* Hàm nội bộ phân loại trạng thái lô tự động dựa theo số ngày hạn sử dụng còn lại */
-function resolveLotStatusByExpDate(expDateStr) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expDate = new Date(String(expDateStr).slice(0, 10) + 'T00:00:00');
-  const daysLeft = Math.round((expDate - today) / (1000 * 60 * 60 * 24));
-  if (daysLeft <= 0) return 'KHOA_HET_HAN';
-  if (daysLeft <= 30) return 'CAN_HAN_30';
-  if (daysLeft <= 60) return 'CAN_HAN_60';
-  if (daysLeft <= 90) return 'CAN_HAN_90';
-  if (daysLeft <= 180) return 'CAN_HAN_180';
+/* Ngưỡng hạn dùng tối thiểu (ngày) để lô được nhập kho bình thường; dưới ngưỡng này phải duyệt đặc cách */
+const SHORT_EXPIRY_DAYS = 180;
+const MAX_SQL_INT = 2147483647;
+
+/* Hàm nội bộ phân loại trạng thái lô theo số ngày còn lại (số ngày do SQL Server tính bằng DATEDIFF,
+   cùng công thức với cột so_ngay_con_lai -> tránh lệch múi giờ / lỗi đọc kiểu Date giữa Node và SQL) */
+function lotStatusFromDaysLeft(daysLeft) {
+  const d = Number(daysLeft);
+  if (!Number.isFinite(d) || d <= 0) return 'KHOA_HET_HAN';
+  if (d <= 30) return 'CAN_HAN_30';
+  if (d <= 60) return 'CAN_HAN_60';
+  if (d <= 90) return 'CAN_HAN_90';
+  if (d <= 180) return 'CAN_HAN_180';
   return 'KHA_DUNG';
+}
+
+/* Hàm kiểm tra chuỗi ngày dạng YYYY-MM-DD và là ngày có thật (vd: chặn 2026-02-30) */
+function isValidIsoDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(value + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+/* Hàm normalizeImportLines: Kiểm tra và TỰ TÍNH LẠI toàn bộ số liệu dòng phiếu nhập trên server.
+   KHÔNG tin các trường client gửi lên như baseQty, lineTotal, isShortExpiry, rate, baseUnit:
+   - Tỷ lệ quy đổi + mã quy đổi lấy từ tbl_quy_doi_don_vi theo (mã thuốc, tên ĐVT); không có -> báo lỗi
+   - baseQty = qty x ty_le_quy_doi, lineTotal = qty x đơn giá nhập
+   - Số ngày còn hạn do SQL Server tính -> tự xác định lô cận hạn (< 180 ngày) và trạng thái lô */
+async function normalizeImportLines(transaction, lines) {
+  const todayRes = await new sql.Request(transaction).query(`SELECT CONVERT(VARCHAR(10), DATEADD(HOUR, 7, SYSUTCDATETIME()), 23) AS hom_nay;`);
+  const today = todayRes.recordset[0].hom_nay;
+
+  const result = [];
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] || {};
+    const rowLabel = `Dòng ${i + 1}`;
+    const drugId = String(raw.drugId || '').trim();
+    const unitName = String(raw.unitName || '').trim();
+    const batchNo = String(raw.batchNo || '').trim();
+    const exp = String(raw.exp || '').slice(0, 10);
+    const mfg = raw.mfg ? String(raw.mfg).slice(0, 10) : null;
+    const qty = Number(raw.qty);
+    const price = Number(raw.price);
+
+    if (!drugId || !unitName || !batchNo) {
+      throw new Error(`${rowLabel}: Thiếu mã thuốc, đơn vị tính hoặc số lô!`);
+    }
+    if (batchNo.length > 50) {
+      throw new Error(`${rowLabel}: Số lô "${batchNo}" quá dài (tối đa 50 ký tự)!`);
+    }
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new Error(`${rowLabel} (lô ${batchNo}): Số lượng nhập phải là số nguyên > 0!`);
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      throw new Error(`${rowLabel} (lô ${batchNo}): Đơn giá nhập phải lớn hơn 0!`);
+    }
+    if (!isValidIsoDate(exp)) {
+      throw new Error(`${rowLabel} (lô ${batchNo}): Hạn sử dụng không hợp lệ (định dạng YYYY-MM-DD)!`);
+    }
+    if (mfg !== null && !isValidIsoDate(mfg)) {
+      throw new Error(`${rowLabel} (lô ${batchNo}): Ngày sản xuất không hợp lệ (định dạng YYYY-MM-DD)!`);
+    }
+    if (mfg !== null && mfg >= exp) {
+      throw new Error(`${rowLabel} (lô ${batchNo}): Ngày sản xuất (${mfg}) phải nhỏ hơn Hạn sử dụng (${exp})!`);
+    }
+    if (mfg !== null && mfg >= today) {
+      throw new Error(`${rowLabel} (lô ${batchNo}): Ngày sản xuất (${mfg}) phải nhỏ hơn ngày hiện tại (${today})!`);
+    }
+
+    /* Tra thuốc + quy cách ĐVT trong CSDL và để SQL Server tính số ngày còn hạn */
+    const infoRes = await new sql.Request(transaction)
+      .input('ma_thuoc', sql.NVarChar(20), drugId)
+      .input('ten_don_vi', sql.NVarChar(50), unitName)
+      .input('han_dung', sql.VarChar(10), exp)
+      .query(`
+        SELECT d.ten_thuoc, d.don_vi_co_ban, d.trang_thai,
+               q.ma_quy_doi, q.ty_le_quy_doi,
+               DATEDIFF(day, CAST(DATEADD(HOUR, 7, SYSUTCDATETIME()) AS DATE), CAST(@han_dung AS DATE)) AS so_ngay_con_lai
+        FROM tbl_dm_thuoc d
+        LEFT JOIN tbl_quy_doi_don_vi q ON q.ma_thuoc = d.ma_thuoc AND q.ten_don_vi = @ten_don_vi
+        WHERE d.ma_thuoc = @ma_thuoc;
+      `);
+    const info = infoRes.recordset[0];
+    if (!info || (info.trang_thai && info.trang_thai !== 'ACTIVE')) {
+      throw new Error(`${rowLabel}: Thuốc ${drugId} không tồn tại hoặc đã ngừng kinh doanh!`);
+    }
+    if (info.ma_quy_doi == null || info.ty_le_quy_doi == null) {
+      throw new Error(`${rowLabel}: Thuốc ${info.ten_thuoc} chưa được cấu hình đơn vị tính "${unitName}" trong tbl_quy_doi_don_vi!`);
+    }
+
+    const daysLeft = Number(info.so_ngay_con_lai);
+    if (daysLeft <= 0) {
+      throw new Error(`${rowLabel}: Lô ${batchNo} có hạn sử dụng (${exp}) đã hết hạn! Tuyệt đối cấm nhập kho.`);
+    }
+
+    const rate = Number(info.ty_le_quy_doi);
+    const baseQty = qty * rate;
+    if (baseQty > MAX_SQL_INT) {
+      throw new Error(`${rowLabel} (lô ${batchNo}): Số lượng quy đổi ra đơn vị cơ bản quá lớn!`);
+    }
+
+    result.push({
+      drugId,
+      drugName: info.ten_thuoc,
+      unitName,
+      maQuyDoi: info.ma_quy_doi,
+      rate,
+      qty,
+      baseQty,
+      price,
+      lineTotal: qty * price,
+      unitCost: Math.round((price / rate) * 100) / 100,
+      batchNo,
+      mfg,
+      exp,
+      baseUnit: info.don_vi_co_ban || 'Viên',
+      daysLeft,
+      lotStatus: lotStatusFromDaysLeft(daysLeft),
+      isShortExpiry: daysLeft < SHORT_EXPIRY_DAYS
+    });
+  }
+  return result;
 }
 
 /* Hàm API GET /data: Lấy danh sách Nhà cung cấp GDP, Danh mục thuốc + ĐVT và Lịch sử phiếu nhập kho + Chi tiết lô nhập */
@@ -306,13 +416,17 @@ router.post('/gui-kiem-nhap', async (req, res) => {
         throw new Error('ERR_GDP_EXPIRED: Nhà phân phối đã hết hạn chứng nhận GDP! Chặn nhập kho.');
       }
 
-      const hasShortExpiry = lines.some(l => Boolean(l.isShortExpiry));
+      /* Server tự tính lại số lượng cơ bản, thành tiền và hạn dùng của từng dòng (không tin dữ liệu client) */
+      const cleanLines = await normalizeImportLines(transaction, lines);
+
+      const hasShortExpiry = cleanLines.some(l => l.isShortExpiry);
       if (hasShortExpiry && !String(specialReason || '').trim()) {
-        throw new Error('Phiếu nhập có lô cận hạn (< 180 ngày), bắt buộc nhập Lý do trình duyệt đặc cách!');
+        const shortLots = cleanLines.filter(l => l.isShortExpiry).map(l => `${l.batchNo} (còn ${l.daysLeft} ngày)`).join(', ');
+        throw new Error(`Phiếu nhập có lô cận hạn (< 180 ngày): ${shortLots}. Bắt buộc nhập Lý do trình duyệt đặc cách!`);
       }
 
       const pendingStatus = hasShortExpiry ? 'CHO_DUYET_DAC_CACH' : 'CHO_KIEM_NHAP';
-      const totalAmount = lines.reduce((sum, l) => sum + Number(l.lineTotal || 0), 0);
+      const totalAmount = cleanLines.reduce((sum, l) => sum + l.lineTotal, 0);
       const receiptCode = 'PNK-' + Date.now().toString().slice(-8);
       /* Dược sĩ hoặc Chủ nhà thuốc đều được lập phiếu, nhưng bắt buộc là tài khoản hợp lệ đang ACTIVE */
       const creator = await requireUser(transaction, userId, null, 'lập phiếu nhập kho');
@@ -349,16 +463,11 @@ router.post('/gui-kiem-nhap', async (req, res) => {
 
       const maPhieuNhap = pnkRes.recordset[0].ma_phieu_nhap;
 
-      for (const line of lines) {
-        const autoLotStatus = resolveLotStatusByExpDate(line.exp);
-        if (autoLotStatus === 'KHOA_HET_HAN' || (line.mfg && new Date(line.exp) <= new Date(line.mfg))) {
-          throw new Error(`Lô ${line.batchNo} có hạn sử dụng (${line.exp}) không hợp lệ hoặc đã hết hạn! Cấm nhập kho.`);
-        }
-
+      for (const line of cleanLines) {
         /* Kiểm tra xem lô (ma_thuoc, so_lo, han_dung) đã tồn tại trong tbl_lo_thuoc chưa */
         const existLotRes = await new sql.Request(transaction)
           .input('ma_thuoc', sql.NVarChar(20), line.drugId)
-          .input('so_lo', sql.NVarChar(50), line.batchNo.trim())
+          .input('so_lo', sql.NVarChar(50), line.batchNo)
           .input('han_dung', sql.Date, line.exp)
           .query(`
             SELECT TOP 1 ma_lo FROM tbl_lo_thuoc
@@ -380,11 +489,11 @@ router.post('/gui-kiem-nhap', async (req, res) => {
           const lotInsertRes = await new sql.Request(transaction)
             .input('ma_lo_hien_thi', sql.VarChar(20), nextLotCode)
             .input('ma_thuoc', sql.NVarChar(20), line.drugId)
-            .input('so_lo', sql.NVarChar(50), line.batchNo.trim())
+            .input('so_lo', sql.NVarChar(50), line.batchNo)
             .input('ngay_san_xuat', sql.Date, line.mfg)
             .input('han_dung', sql.Date, line.exp)
-            .input('don_vi_co_ban', sql.NVarChar(30), line.baseUnit || 'Viên')
-            .input('gia_von_nhap', sql.Decimal(18, 2), Math.round(Number(line.price) / Number(line.rate || 1)))
+            .input('don_vi_co_ban', sql.NVarChar(30), line.baseUnit)
+            .input('gia_von_nhap', sql.Decimal(18, 2), line.unitCost)
             .query(`
               INSERT INTO tbl_lo_thuoc (
                 ma_lo_hien_thi, ma_thuoc, so_lo, ngay_san_xuat, han_dung,
@@ -399,23 +508,20 @@ router.post('/gui-kiem-nhap', async (req, res) => {
           maLo = lotInsertRes.recordset[0].ma_lo;
         }
 
-        const qdRes = await new sql.Request(transaction)
-          .input('ma_thuoc', sql.NVarChar(20), line.drugId)
-          .input('ten_don_vi', sql.NVarChar(50), line.unitName)
-          .query(`SELECT TOP 1 ma_quy_doi FROM tbl_quy_doi_don_vi WHERE ma_thuoc = @ma_thuoc AND ten_don_vi = @ten_don_vi`);
-        const maQuyDoi = qdRes.recordset[0]?.ma_quy_doi || 1;
+        /* Mã quy đổi đã được tra và xác thực trong normalizeImportLines (không còn gán mặc định = 1) */
+        const maQuyDoi = line.maQuyDoi;
 
         const gppNoteText = line.isShortExpiry
-          ? 'Cận hạn (< 180 ngày - Chờ duyệt đặc cách)'
+          ? `Cận hạn (còn ${line.daysLeft} ngày < 180 ngày - Chờ duyệt đặc cách)`
           : 'Đạt chuẩn (>= 180 ngày)';
 
         await new sql.Request(transaction)
           .input('ma_phieu_nhap', sql.BigInt, maPhieuNhap)
           .input('ma_lo', sql.BigInt, maLo)
           .input('ma_quy_doi', sql.BigInt, maQuyDoi)
-          .input('so_luong_nhap', sql.Int, Number(line.qty))
-          .input('so_luong_co_ban', sql.Int, Number(line.baseQty))
-          .input('don_gia_nhap', sql.Decimal(18, 2), Number(line.price))
+          .input('so_luong_nhap', sql.Int, line.qty)
+          .input('so_luong_co_ban', sql.Int, line.baseQty)
+          .input('don_gia_nhap', sql.Decimal(18, 2), line.price)
           .input('ghi_chu_han_gpp', sql.NVarChar(255), gppNoteText)
           .query(`
             INSERT INTO tbl_ct_phieu_nhap (
@@ -489,12 +595,16 @@ router.post('/phe-duyet-nhap', async (req, res) => {
         throw new Error('ERR_GDP_EXPIRED: Nhà phân phối đã hết hạn chứng nhận GDP! Chặn nhập kho.');
       }
 
-      const hasShortExpiry = lines.some(l => Boolean(l.isShortExpiry));
+      /* Server tự tính lại số lượng cơ bản, thành tiền và hạn dùng của từng dòng (không tin dữ liệu client) */
+      const cleanLines = await normalizeImportLines(transaction, lines);
+
+      const hasShortExpiry = cleanLines.some(l => l.isShortExpiry);
       if (hasShortExpiry && !String(specialReason || '').trim()) {
-        throw new Error('Vui lòng nhập Lý do duyệt đặc cách cho lô cận hạn (< 180 ngày) trước khi phê duyệt!');
+        const shortLots = cleanLines.filter(l => l.isShortExpiry).map(l => `${l.batchNo} (còn ${l.daysLeft} ngày)`).join(', ');
+        throw new Error(`Phiếu nhập có lô cận hạn (< 180 ngày): ${shortLots}. Vui lòng nhập Lý do duyệt đặc cách trước khi phê duyệt!`);
       }
 
-      const totalAmount = lines.reduce((sum, l) => sum + Number(l.lineTotal || 0), 0);
+      const totalAmount = cleanLines.reduce((sum, l) => sum + l.lineTotal, 0);
       const receiptCode = 'PNK-' + Date.now().toString().slice(-8);
 
       /* Thêm phiếu nhập kho trạng thái DA_DUYET_NHAP vào bảng tbl_phieu_nhap_kho */
@@ -530,18 +640,14 @@ router.post('/phe-duyet-nhap', async (req, res) => {
       const maPhieuNhap = pnkRes.recordset[0].ma_phieu_nhap;
 
       /* Duyệt từng dòng lô thuốc để tạo mới hoặc cộng dồn tồn kho vào tbl_lo_thuoc */
-      for (const line of lines) {
-        const autoLotStatus = resolveLotStatusByExpDate(line.exp);
-        if (autoLotStatus === 'KHOA_HET_HAN' || (line.mfg && new Date(line.exp) <= new Date(line.mfg))) {
-          throw new Error(`Lô ${line.batchNo} có hạn sử dụng (${line.exp}) không hợp lệ hoặc đã hết hạn, tuyệt đối cấm nhập kho!`);
-        }
-
-        const unitCost = Math.round(Number(line.price) / Number(line.rate || 1));
+      for (const line of cleanLines) {
+        const autoLotStatus = line.lotStatus;
+        const unitCost = line.unitCost;
 
         /* Kiểm tra lô (ma_thuoc, so_lo, han_dung) đã tồn tại chưa để cộng dồn thay vì lỗi trùng khóa uq_lo_thuoc_so_lo */
         const existLotRes = await new sql.Request(transaction)
           .input('ma_thuoc', sql.NVarChar(20), line.drugId)
-          .input('so_lo', sql.NVarChar(50), line.batchNo.trim())
+          .input('so_lo', sql.NVarChar(50), line.batchNo)
           .input('han_dung', sql.Date, line.exp)
           .query(`
             SELECT TOP 1 ma_lo FROM tbl_lo_thuoc WITH (UPDLOCK, ROWLOCK)
@@ -553,7 +659,7 @@ router.post('/phe-duyet-nhap', async (req, res) => {
         if (maLo) {
           await new sql.Request(transaction)
             .input('ma_lo', sql.BigInt, maLo)
-            .input('add_qty', sql.Int, Number(line.baseQty))
+            .input('add_qty', sql.Int, line.baseQty)
             .input('gia_von_nhap', sql.Decimal(18, 2), unitCost)
             .input('trang_thai_lo', sql.VarChar(20), autoLotStatus)
             .query(`
@@ -574,11 +680,11 @@ router.post('/phe-duyet-nhap', async (req, res) => {
           const lotRes = await new sql.Request(transaction)
             .input('ma_lo_hien_thi', sql.VarChar(20), nextLotCode)
             .input('ma_thuoc', sql.NVarChar(20), line.drugId)
-            .input('so_lo', sql.NVarChar(50), line.batchNo.trim())
+            .input('so_lo', sql.NVarChar(50), line.batchNo)
             .input('ngay_san_xuat', sql.Date, line.mfg)
             .input('han_dung', sql.Date, line.exp)
-            .input('so_luong_ton', sql.Int, Number(line.baseQty))
-            .input('don_vi_co_ban', sql.NVarChar(30), line.baseUnit || 'Viên')
+            .input('so_luong_ton', sql.Int, line.baseQty)
+            .input('don_vi_co_ban', sql.NVarChar(30), line.baseUnit)
             .input('gia_von_nhap', sql.Decimal(18, 2), unitCost)
             .input('trang_thai_lo', sql.VarChar(20), autoLotStatus)
             .query(`
@@ -595,14 +701,10 @@ router.post('/phe-duyet-nhap', async (req, res) => {
           maLo = lotRes.recordset[0].ma_lo;
         }
 
-        const qdRes = await new sql.Request(transaction)
-          .input('ma_thuoc', sql.NVarChar(20), line.drugId)
-          .input('ten_don_vi', sql.NVarChar(50), line.unitName)
-          .query(`SELECT TOP 1 ma_quy_doi FROM tbl_quy_doi_don_vi WHERE ma_thuoc = @ma_thuoc AND ten_don_vi = @ten_don_vi`);
-
-        const maQuyDoi = qdRes.recordset[0]?.ma_quy_doi || 1;
+        /* Mã quy đổi đã được tra và xác thực trong normalizeImportLines (không còn gán mặc định = 1) */
+        const maQuyDoi = line.maQuyDoi;
         const gppNoteText = line.isShortExpiry
-          ? 'Cận hạn (< 180 ngày - Đã duyệt đặc cách)'
+          ? `Cận hạn (còn ${line.daysLeft} ngày < 180 ngày - Đã duyệt đặc cách)`
           : 'Đạt chuẩn (>= 180 ngày)';
 
         /* Lưu chi tiết phiếu nhập vào bảng tbl_ct_phieu_nhap */
@@ -610,9 +712,9 @@ router.post('/phe-duyet-nhap', async (req, res) => {
           .input('ma_phieu_nhap', sql.BigInt, maPhieuNhap)
           .input('ma_lo', sql.BigInt, maLo)
           .input('ma_quy_doi', sql.BigInt, maQuyDoi)
-          .input('so_luong_nhap', sql.Int, Number(line.qty))
-          .input('so_luong_co_ban', sql.Int, Number(line.baseQty))
-          .input('don_gia_nhap', sql.Decimal(18, 2), Number(line.price))
+          .input('so_luong_nhap', sql.Int, line.qty)
+          .input('so_luong_co_ban', sql.Int, line.baseQty)
+          .input('don_gia_nhap', sql.Decimal(18, 2), line.price)
           .input('ghi_chu_han_gpp', sql.NVarChar(255), gppNoteText)
           .query(`
             INSERT INTO tbl_ct_phieu_nhap (
@@ -670,7 +772,7 @@ router.post('/duyet-phieu-cho', async (req, res) => {
       const pnkRes = await new sql.Request(transaction)
         .input('ma_phieu_nhap', sql.BigInt, Number(receiptId))
         .query(`
-          SELECT ma_phieu_nhap, so_phieu_nhap, trang_thai_nhap
+          SELECT ma_phieu_nhap, so_phieu_nhap, ma_ncc, trang_thai_nhap
           FROM tbl_phieu_nhap_kho WITH (UPDLOCK, ROWLOCK)
           WHERE ma_phieu_nhap = @ma_phieu_nhap;
         `);
@@ -681,29 +783,60 @@ router.post('/duyet-phieu-cho', async (req, res) => {
       if (pnkRow.trang_thai_nhap === 'DA_DUYET_NHAP') {
         throw new Error(`Phiếu nhập ${pnkRow.so_phieu_nhap} đã được phê duyệt trước đó!`);
       }
+      if (!['CHO_KIEM_NHAP', 'CHO_DUYET_DAC_CACH'].includes(pnkRow.trang_thai_nhap)) {
+        throw new Error(`Phiếu nhập ${pnkRow.so_phieu_nhap} đang ở trạng thái ${pnkRow.trang_thai_nhap}, không thể phê duyệt!`);
+      }
 
-      /* Lấy các dòng chi tiết của phiếu nhập để cộng tồn kho cho các lô CHO_DUYET_NHAP */
+      /* Kiểm tra lại hiệu lực chứng nhận GDP của nhà phân phối tại thời điểm phê duyệt */
+      const supCheck = await new sql.Request(transaction)
+        .input('ma_ncc', sql.NVarChar(20), pnkRow.ma_ncc)
+        .query(`SELECT trang_thai_gdp, ngay_het_han FROM tbl_nha_cung_cap_gdp WHERE ma_ncc = @ma_ncc`);
+      const supRow = supCheck.recordset[0];
+      if (!supRow || supRow.trang_thai_gdp === 'HET_HIEU_LUC' || (supRow.ngay_het_han && new Date(supRow.ngay_het_han) < new Date())) {
+        throw new Error('ERR_GDP_EXPIRED: Nhà phân phối đã hết hạn chứng nhận GDP tại thời điểm phê duyệt! Chặn nhập kho.');
+      }
+
+      /* Lấy các dòng chi tiết của phiếu nhập để cộng tồn kho cho các lô CHO_DUYET_NHAP.
+         Số ngày còn hạn lấy từ cột tính toán so_ngay_con_lai của SQL Server (không tự parse kiểu Date trong Node) */
       const ctRes = await new sql.Request(transaction)
         .input('ma_phieu_nhap', sql.BigInt, Number(receiptId))
         .query(`
-          SELECT ct.ma_lo, ct.so_luong_co_ban, l.han_dung, l.trang_thai_lo
+          SELECT ct.ma_lo, ct.so_luong_nhap, ct.so_luong_co_ban, ct.don_gia_nhap,
+                 l.so_lo, l.so_ngay_con_lai, l.trang_thai_lo, l.gia_von_nhap,
+                 CONVERT(VARCHAR(10), l.han_dung, 23) AS han_dung
           FROM tbl_ct_phieu_nhap ct
-          INNER JOIN tbl_lo_thuoc l ON ct.ma_lo = l.ma_lo
+          INNER JOIN tbl_lo_thuoc l WITH (UPDLOCK, ROWLOCK) ON ct.ma_lo = l.ma_lo
           WHERE ct.ma_phieu_nhap = @ma_phieu_nhap;
         `);
 
+      if (ctRes.recordset.length === 0) {
+        throw new Error(`Phiếu nhập ${pnkRow.so_phieu_nhap} không có dòng chi tiết lô thuốc nào để phê duyệt!`);
+      }
+
+      /* Chặn duyệt nếu tại thời điểm duyệt có lô đã hết hạn (phiếu chờ lâu ngày) */
+      const expiredLots = ctRes.recordset.filter(ct => Number(ct.so_ngay_con_lai) <= 0);
+      if (expiredLots.length > 0) {
+        const names = expiredLots.map(ct => `${ct.so_lo} (HSD ${ct.han_dung})`).join(', ');
+        throw new Error(`Không thể phê duyệt: lô ${names} đã hết hạn tại thời điểm duyệt. Tuyệt đối cấm cộng tồn kho!`);
+      }
+
       for (const ct of ctRes.recordset) {
-        const autoStatus = resolveLotStatusByExpDate(ct.han_dung);
-        /* Mọi phiếu tạo qua Bước 1 (/gui-kiem-nhap) đều chưa cộng tồn kho; riêng phiếu mẫu PNK-202610-002 trong seed data đã có sẵn tồn LO-06 = 70 thì giữ nguyên tránh cộng lặp */
-        const isPreSeededReceipt = (pnkRow.so_phieu_nhap === 'PNK-202610-002' && ct.trang_thai_lo !== 'CHO_DUYET_NHAP');
-        const addQty = isPreSeededReceipt ? 0 : Number(ct.so_luong_co_ban);
+        const autoStatus = lotStatusFromDaysLeft(ct.so_ngay_con_lai);
+        const addQty = Number(ct.so_luong_co_ban);
+        const lineTotalNoVat = Number(ct.so_luong_nhap || 0) * Number(ct.don_gia_nhap || 0);
+        const unitCost = addQty > 0
+          ? Math.round((lineTotalNoVat / addQty) * 100) / 100
+          : Number(ct.gia_von_nhap || 0);
+
         await new sql.Request(transaction)
           .input('ma_lo', sql.BigInt, ct.ma_lo)
           .input('add_qty', sql.Int, addQty)
+          .input('gia_von_nhap', sql.Decimal(18, 2), unitCost)
           .input('trang_thai_lo', sql.VarChar(20), autoStatus)
           .query(`
             UPDATE tbl_lo_thuoc
             SET so_luong_ton = so_luong_ton + @add_qty,
+                gia_von_nhap = @gia_von_nhap,
                 trang_thai_lo = @trang_thai_lo
             WHERE ma_lo = @ma_lo;
           `);
@@ -747,5 +880,10 @@ router.post('/duyet-phieu-cho', async (req, res) => {
     res.status(err.status || 400).json({ ok: false, message: err.message });
   }
 });
+
+/* Xuất thêm các hàm kiểm tra dòng phiếu nhập để phục vụ kiểm thử đơn vị (Unit Test) */
+router.normalizeImportLines = normalizeImportLines;
+router.lotStatusFromDaysLeft = lotStatusFromDaysLeft;
+router.isValidIsoDate = isValidIsoDate;
 
 module.exports = router;

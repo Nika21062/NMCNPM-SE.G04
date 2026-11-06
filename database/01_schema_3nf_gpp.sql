@@ -110,12 +110,12 @@ CREATE TABLE tbl_lo_thuoc (
     so_lo                   NVARCHAR(50)  NOT NULL,
     han_dung                DATE          NOT NULL,
     ngay_san_xuat           DATE          NULL,
-    ngay_nhap_kho           DATE          NOT NULL DEFAULT CAST(GETDATE() AS DATE),
+    ngay_nhap_kho           DATE          NOT NULL DEFAULT CAST(DATEADD(HOUR, 7, SYSUTCDATETIME()) AS DATE),
     so_luong_ton            INT           NOT NULL DEFAULT 0, -- Luôn lưu theo ĐVT cơ bản nhỏ nhất
     don_vi_co_ban           NVARCHAR(30)  NOT NULL,
     gia_von_nhap            DECIMAL(18,2) NOT NULL DEFAULT 0,
     trang_thai_lo           VARCHAR(20)   NOT NULL DEFAULT 'KHA_DUNG',
-    so_ngay_con_lai         AS (DATEDIFF(day, CAST(GETDATE() AS DATE), han_dung)),
+    so_ngay_con_lai         AS (DATEDIFF(day, CAST(DATEADD(HOUR, 7, SYSUTCDATETIME()) AS DATE), han_dung)),
     CONSTRAINT pk_lo_thuoc PRIMARY KEY (ma_lo),
     CONSTRAINT uq_lo_thuoc_so_lo UNIQUE (ma_thuoc, so_lo, han_dung),
     CONSTRAINT fk_lo_thuoc_dm FOREIGN KEY (ma_thuoc) REFERENCES tbl_dm_thuoc(ma_thuoc),
@@ -162,7 +162,7 @@ CREATE TABLE tbl_phieu_nhap_kho (
     so_hoa_don_vat          VARCHAR(50)   NOT NULL,
     ngay_hoa_don            DATE          NOT NULL,
     file_chung_tu_url       NVARCHAR(255) NULL,
-    ngay_gio_lap            DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    ngay_gio_lap            DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ma_nhan_vien_lap        INT           NOT NULL,
     ma_quan_ly_duyet        INT           NULL,
     kenh_phe_duyet          VARCHAR(20)   NULL,
@@ -218,7 +218,7 @@ CREATE TABLE tbl_hoa_don_ban_le (
     ma_hoa_don              BIGINT IDENTITY(1,1) NOT NULL,
     so_hoa_don              VARCHAR(30)   NULL,
     ma_nhan_vien            INT           NOT NULL,
-    ngay_ban                DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    ngay_ban                DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ten_khach_hang          NVARCHAR(100) NULL,
     ma_don_thuoc_etc        VARCHAR(50)   NULL,
     bac_si_ke_don           NVARCHAR(150) NULL, -- Bắt buộc nhập trên POS khi có thuốc ETC (R05)
@@ -267,7 +267,7 @@ CREATE TABLE tbl_phieu_xuat_kho (
     ma_phieu_xuat           BIGINT IDENTITY(1,1) NOT NULL,
     so_phieu_xuat           VARCHAR(30)   NOT NULL UNIQUE,
     loai_xuat               VARCHAR(30)   NOT NULL, -- 'XUAT_HUY_HET_HAN', 'XUAT_TRA_NCC'
-    ngay_lap                DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    ngay_lap                DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ma_nhan_vien_lap        INT           NOT NULL,
     ma_quan_ly_duyet        INT           NULL,
     ly_do_xuat              NVARCHAR(500) NOT NULL,
@@ -301,7 +301,7 @@ GO
 -- =========================================================================================
 CREATE TABLE tbl_nhat_ky_he_thong (
     ma_log                  BIGINT IDENTITY(1,1) NOT NULL,
-    thoi_gian               DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    thoi_gian               DATETIME2     NOT NULL DEFAULT DATEADD(HOUR, 7, SYSUTCDATETIME()),
     ma_nguoi_dung           INT           NULL,
     hanh_dong               VARCHAR(50)   NOT NULL,
     bang_tac_dong           VARCHAR(50)   NOT NULL,

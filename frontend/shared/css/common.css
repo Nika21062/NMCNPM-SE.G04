@@ -279,6 +279,7 @@ body {
 
 /* Định dạng chung cho các ô nhập liệu văn bản, mật khẩu, số, ngày tháng và hộp chọn */
 input[type="text"],
+input[type="search"],
 input[type="password"],
 input[type="number"],
 input[type="date"],

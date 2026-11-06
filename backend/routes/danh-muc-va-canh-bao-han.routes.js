@@ -115,9 +115,13 @@ router.get('/data', async (req, res) => {
 
 /* Hàm API POST /thuoc: Thêm mới hồ sơ thuốc chuẩn GPP và cấu hình 3 cấp ĐVT vào SQL Server */
 router.post('/thuoc', async (req, res) => {
-  const { barcode, name, ingredient, sdk, type, minStock, units, userId } = req.body;
+  const { barcode, name, ingredient, strength, dosageForm, sdk, type, minStock, shelfLocation, sop, units, userId } = req.body;
   if (!barcode || !name || !ingredient || !sdk || !Array.isArray(units) || units.length === 0) {
     return res.status(400).json({ ok: false, message: 'ERR_MISSING_GPP_FIELDS: Vui lòng nhập đủ thông tin định danh thuốc và đơn vị tính!' });
+  }
+  const cleanType = String(type || 'OTC').trim().toUpperCase();
+  if (!['OTC', 'ETC'].includes(cleanType)) {
+    return res.status(400).json({ ok: false, message: 'ERR_INVALID_DRUG_TYPE: Phân loại thuốc chỉ chấp nhận OTC hoặc ETC!' });
   }
 
   try {
@@ -126,7 +130,7 @@ router.post('/thuoc', async (req, res) => {
     await transaction.begin();
 
     try {
-      /* Kiểm tra quyền cho_phep_sua_gia trong bảng tbl_vai_tro (không dùng userId mặc định) */
+      /* Kiểm tra quyền cho_phep_sua_gia trong bảng tbl_vai_tro */
       const actor = await requireUser(transaction, userId, 'cho_phep_sua_gia', 'thêm thuốc mới và khóa giá bán niêm yết');
       const actorId = actor.ma_nguoi_dung;
 
@@ -143,17 +147,28 @@ router.post('/thuoc', async (req, res) => {
         throw new Error(`ERR_DUPLICATE_DRUG: Mã vạch Barcode hoặc Số đăng ký (SĐK) đã tồn tại trong CSDL (${dupDrugRes.recordset[0].ma_thuoc})!`);
       }
 
-      /* Kiểm tra tính hợp lệ và không trùng tên đơn vị tính trong mảng units */
+      /* Kiểm tra tính hợp lệ, đơn vị cơ bản cấp 1 (rate = 1), hệ số quy đổi tăng dần và không trùng tên ĐVT */
+      if (Number(units[0]?.rate) !== 1) {
+        throw new Error('ERR_INVALID_BASE_UNIT: Đơn vị cơ bản (Cấp 1) bắt buộc phải có hệ số quy đổi bằng 1!');
+      }
       const seenUnitNames = new Set();
-      for (const u of units) {
+      let prevRate = 0;
+      for (let i = 0; i < units.length; i++) {
+        const u = units[i];
         const cleanUName = String(u.unitName || '').trim().toLowerCase();
-        if (!cleanUName || Number(u.rate) < 1 || Number(u.price) <= 0) {
-          throw new Error('ERR_INVALID_UNIT_RATE: Tên đơn vị tính không được để trống, tỷ lệ quy đổi >= 1 và giá bán niêm yết > 0!');
+        const rateNum = Number(u.rate);
+        const priceNum = Number(u.price);
+        if (!cleanUName || !Number.isInteger(rateNum) || rateNum < 1 || !(priceNum > 0)) {
+          throw new Error('ERR_INVALID_UNIT_RATE: Tên đơn vị tính không được để trống, tỷ lệ quy đổi phải là số nguyên >= 1 và giá bán niêm yết > 0!');
+        }
+        if (i > 0 && rateNum <= prevRate) {
+          throw new Error(`ERR_INVALID_UNIT_HIERARCHY: Hệ số quy đổi của cấp đơn vị "${u.unitName}" (${rateNum}) phải lớn hơn cấp đơn vị liền trước (${prevRate})!`);
         }
         if (seenUnitNames.has(cleanUName)) {
           throw new Error(`ERR_DUPLICATE_UNIT_NAME: Tên đơn vị tính "${u.unitName}" bị lặp lại nhiều lần trong cùng một thuốc!`);
         }
         seenUnitNames.add(cleanUName);
+        prevRate = rateNum;
       }
 
       /* Sinh mã thuốc tự động tiếp theo dựa trên MAX(DRGxx) để không bị trùng khóa khi xóa bản ghi ở giữa */
@@ -165,21 +180,40 @@ router.post('/thuoc', async (req, res) => {
       const nextNum = maxRes.recordset[0].next_num || 1;
       const newDrugId = 'DRG' + String(nextNum).padStart(2, '0');
       const baseUnitName = (units[0].unitName || 'Viên').trim();
+      const cleanStrength = String(strength || '').trim() || null;
+      const cleanDosageForm = String(dosageForm || '').trim() || 'Viên nén';
+      const cleanShelf = String(shelfLocation || '').trim() || 'Tủ A - Quầy bán lẻ';
+      const cleanSop = String(sop || '').trim() || (
+        cleanType === 'ETC'
+          ? 'Bước 1: Kiểm tra đơn thuốc bác sĩ hợp lệ (ETC)|Bước 2: Tư vấn đúng liều lượng và cảnh báo tác dụng phụ|Bước 3: Kiểm tra hạn dùng lô FEFO trước khi giao thuốc'
+          : 'Bước 1: Hỏi triệu chứng và tiền sử dị ứng thuốc (OTC)|Bước 2: Hướng dẫn liều dùng và thời điểm uống|Bước 3: Kiểm tra hạn dùng lô FEFO trước khi xuất bán'
+      );
 
       /* Lưu thông tin định danh thuốc vào bảng tbl_dm_thuoc */
       await new sql.Request(transaction)
         .input('ma_thuoc', sql.NVarChar(20), newDrugId)
         .input('ten_thuoc', sql.NVarChar(300), name.trim())
         .input('hoat_chat', sql.NVarChar(200), ingredient.trim())
+        .input('ham_luong', sql.NVarChar(100), cleanStrength)
+        .input('dang_bao_che', sql.NVarChar(100), cleanDosageForm)
         .input('so_dang_ky', sql.VarChar(50), sdk.trim())
         .input('ma_vach_barcode', sql.VarChar(50), barcode.trim())
-        .input('phan_loai_ke_don', sql.VarChar(10), type || 'OTC')
+        .input('phan_loai_ke_don', sql.VarChar(10), cleanType)
         .input('don_vi_co_ban', sql.NVarChar(30), baseUnitName)
-        .input('muc_ton_toi_thieu', sql.Int, Number(minStock || 50))
-        .input('ghi_chu_sop', sql.NVarChar(sql.MAX), 'Tư vấn đúng liều lượng và kiểm tra hạn dùng lô FEFO trước khi xuất bán.')
+        .input('muc_ton_toi_thieu', sql.Int, Math.max(0, Number(minStock ?? 50)))
+        .input('vi_tri_tu_quay', sql.NVarChar(50), cleanShelf)
+        .input('ghi_chu_sop', sql.NVarChar(sql.MAX), cleanSop)
         .query(`
-          INSERT INTO tbl_dm_thuoc (ma_thuoc, ten_thuoc, hoat_chat, so_dang_ky, ma_vach_barcode, phan_loai_ke_don, don_vi_co_ban, muc_ton_toi_thieu, ghi_chu_sop)
-          VALUES (@ma_thuoc, @ten_thuoc, @hoat_chat, @so_dang_ky, @ma_vach_barcode, @phan_loai_ke_don, @don_vi_co_ban, @muc_ton_toi_thieu, @ghi_chu_sop)
+          INSERT INTO tbl_dm_thuoc (
+            ma_thuoc, ten_thuoc, hoat_chat, ham_luong, dang_bao_che,
+            so_dang_ky, ma_vach_barcode, phan_loai_ke_don, don_vi_co_ban,
+            muc_ton_toi_thieu, vi_tri_tu_quay, ghi_chu_sop
+          )
+          VALUES (
+            @ma_thuoc, @ten_thuoc, @hoat_chat, @ham_luong, @dang_bao_che,
+            @so_dang_ky, @ma_vach_barcode, @phan_loai_ke_don, @don_vi_co_ban,
+            @muc_ton_toi_thieu, @vi_tri_tu_quay, @ghi_chu_sop
+          )
         `);
 
       /* Lưu ma trận quy đổi 3 cấp đơn vị tính vào bảng tbl_quy_doi_don_vi */
@@ -223,9 +257,27 @@ router.post('/thuoc', async (req, res) => {
   }
 });
 
+/* Ngưỡng nguy cấp: chỉ lô quá hạn hoặc còn <= 30 ngày mới được đưa vào phiếu xuất hủy / trả NCC */
+const DESTROY_MAX_DAYS_LEFT = 30;
+const ALLOWED_EXPORT_TYPES = ['XUAT_HUY_HET_HAN', 'XUAT_TRA_NCC'];
+/* Trạng thái lô không được phép xuất hủy: chưa duyệt nhập kho hoặc đã xuất khỏi kho */
+const NON_DESTROYABLE_STATUSES = ['CHO_DUYET_NHAP', 'XUAT_HUY', 'XUAT_TRA_NCC'];
+
 /* Hàm API POST /xuat-huy: Lập phiếu xuất hủy / trả NCC cho các lô thuốc quá hạn hoặc nguy cấp (<= 30 ngày) */
 router.post('/xuat-huy', async (req, res) => {
   const { exportType, reason, lotIds, userId } = req.body;
+
+  const cleanExportType = exportType || 'XUAT_HUY_HET_HAN';
+  if (!ALLOWED_EXPORT_TYPES.includes(cleanExportType)) {
+    return res.status(400).json({ ok: false, message: `Loại phiếu xuất "${exportType}" không hợp lệ (chỉ chấp nhận XUAT_HUY_HET_HAN hoặc XUAT_TRA_NCC)!` });
+  }
+  const cleanLotIds = Array.isArray(lotIds)
+    ? [...new Set(lotIds.map(x => String(x || '').trim()).filter(Boolean))]
+    : [];
+  if (cleanLotIds.length === 0) {
+    return res.status(400).json({ ok: false, message: 'Vui lòng chọn ít nhất một lô thuốc cần xuất hủy / trả NCC!' });
+  }
+
   try {
     const pool = await getPool();
     const transaction = new sql.Transaction(pool);
@@ -236,9 +288,43 @@ router.post('/xuat-huy', async (req, res) => {
       const actor = await requireUser(transaction, userId, 'cho_phep_duyet_kho', 'ký duyệt phiếu xuất hủy / trả NCC');
       const actorId = actor.ma_nguoi_dung;
       const noteCode = 'PXH-' + Date.now().toString().slice(-8);
-      const cleanExportType = exportType || 'XUAT_HUY_HET_HAN';
       const targetLotStatus = cleanExportType === 'XUAT_TRA_NCC' ? 'XUAT_TRA_NCC' : 'XUAT_HUY';
 
+      /* BƯỚC 1: Khóa dòng và kiểm tra TOÀN BỘ lô trước khi ghi; chỉ cần 1 lô không hợp lệ là hủy cả phiếu */
+      const validLots = [];
+      const errors = [];
+      for (const lotCode of cleanLotIds) {
+        const lotRes = await new sql.Request(transaction)
+          .input('ma_lo_hien_thi', sql.VarChar(20), lotCode)
+          .query(`
+            SELECT TOP 1 ma_lo, so_lo, so_luong_ton, trang_thai_lo, so_ngay_con_lai,
+                   ISNULL(ma_lo_hien_thi, 'LO-' + RIGHT('00' + CAST(ma_lo AS VARCHAR(10)), 2)) AS ma_lo_hien_thi
+            FROM tbl_lo_thuoc WITH (UPDLOCK, ROWLOCK)
+            WHERE ISNULL(ma_lo_hien_thi, 'LO-' + RIGHT('00' + CAST(ma_lo AS VARCHAR(10)), 2)) = @ma_lo_hien_thi
+               OR CAST(ma_lo AS VARCHAR(20)) = @ma_lo_hien_thi;
+          `);
+
+        const row = lotRes.recordset[0];
+        if (!row) {
+          errors.push(`${lotCode}: không tồn tại`);
+        } else if (NON_DESTROYABLE_STATUSES.includes(row.trang_thai_lo)) {
+          errors.push(`${row.ma_lo_hien_thi} (${row.so_lo}): đang ở trạng thái ${row.trang_thai_lo}`);
+        } else if (Number(row.so_luong_ton) <= 0) {
+          errors.push(`${row.ma_lo_hien_thi} (${row.so_lo}): đã hết tồn kho`);
+        } else if (Number(row.so_ngay_con_lai) > DESTROY_MAX_DAYS_LEFT) {
+          errors.push(`${row.ma_lo_hien_thi} (${row.so_lo}): còn ${row.so_ngay_con_lai} ngày (> ${DESTROY_MAX_DAYS_LEFT} ngày)`);
+        } else {
+          validLots.push(row);
+        }
+      }
+
+      if (errors.length > 0) {
+        const httpErr = new Error(`Không thể lập phiếu xuất hủy / trả NCC. Chỉ được xuất các lô đã quá hạn hoặc còn <= ${DESTROY_MAX_DAYS_LEFT} ngày và còn tồn kho. Lô không hợp lệ: ${errors.join('; ')}`);
+        httpErr.status = 400;
+        throw httpErr;
+      }
+
+      /* BƯỚC 2: Lập phiếu xuất kho (Chủ nhà thuốc lập kiêm ký duyệt) */
       const pxRes = await new sql.Request(transaction)
         .input('so_phieu_xuat', sql.VarChar(30), noteCode)
         .input('loai_xuat', sql.VarChar(30), cleanExportType)
@@ -253,51 +339,40 @@ router.post('/xuat-huy', async (req, res) => {
       const maPhieuXuat = pxRes.recordset[0].ma_phieu_xuat;
       const exportedSummary = [];
 
-      if (Array.isArray(lotIds)) {
-        for (const lotCode of lotIds) {
-          const lotRes = await new sql.Request(transaction)
-            .input('ma_lo_hien_thi', sql.VarChar(20), String(lotCode))
-            .query(`
-              SELECT TOP 1 ma_lo, so_lo, so_luong_ton, trang_thai_lo
-              FROM tbl_lo_thuoc WITH (UPDLOCK, ROWLOCK)
-              WHERE (ma_lo_hien_thi = @ma_lo_hien_thi OR CAST(ma_lo AS VARCHAR(20)) = @ma_lo_hien_thi)
-                AND so_luong_ton > 0;
-            `);
+      /* BƯỚC 3: Ghi chi tiết phiếu xuất và đưa tồn kho của lô về 0 */
+      for (const row of validLots) {
+        await new sql.Request(transaction)
+          .input('ma_phieu_xuat', sql.BigInt, maPhieuXuat)
+          .input('ma_lo', sql.BigInt, row.ma_lo)
+          .input('so_luong_xuat_co_ban', sql.Int, Number(row.so_luong_ton))
+          .query(`
+            INSERT INTO tbl_ct_phieu_xuat (ma_phieu_xuat, ma_lo, so_luong_xuat_co_ban, ghi_chu_kiem_soat)
+            VALUES (@ma_phieu_xuat, @ma_lo, @so_luong_xuat_co_ban, N'Đã xuất hủy/trả NCC theo quy trình kiểm soát GPP');
+          `);
 
-          const row = lotRes.recordset[0];
-          if (row) {
-            await new sql.Request(transaction)
-              .input('ma_phieu_xuat', sql.BigInt, maPhieuXuat)
-              .input('ma_lo', sql.BigInt, row.ma_lo)
-              .input('so_luong_xuat_co_ban', sql.Int, Number(row.so_luong_ton))
-              .query(`
-                INSERT INTO tbl_ct_phieu_xuat (ma_phieu_xuat, ma_lo, so_luong_xuat_co_ban, ghi_chu_kiem_soat)
-                VALUES (@ma_phieu_xuat, @ma_lo, @so_luong_xuat_co_ban, N'Đã xuất hủy/trả NCC theo quy trình kiểm soát GPP');
-              `);
+        await new sql.Request(transaction)
+          .input('ma_lo', sql.BigInt, row.ma_lo)
+          .input('trang_thai_moi', sql.VarChar(20), targetLotStatus)
+          .query(`
+            UPDATE tbl_lo_thuoc
+            SET so_luong_ton = 0, trang_thai_lo = @trang_thai_moi
+            WHERE ma_lo = @ma_lo;
 
-            await new sql.Request(transaction)
-              .input('ma_lo', sql.BigInt, row.ma_lo)
-              .input('trang_thai_moi', sql.VarChar(20), targetLotStatus)
-              .query(`
-                UPDATE tbl_lo_thuoc
-                SET so_luong_ton = 0, trang_thai_lo = @trang_thai_moi
-                WHERE ma_lo = @ma_lo;
+            /* Đóng các phiếu xuất cũ đang CHO_DUYET của cùng lô (vd: phiếu mẫu PXH-202610-001) vì lô đã được xử lý */
+            UPDATE tbl_phieu_xuat_kho
+            SET trang_thai = 'DA_DUYET'
+            WHERE trang_thai = 'CHO_DUYET'
+              AND ma_phieu_xuat IN (SELECT ma_phieu_xuat FROM tbl_ct_phieu_xuat WHERE ma_lo = @ma_lo);
+          `);
 
-                UPDATE tbl_phieu_xuat_kho
-                SET trang_thai = 'DA_DUYET'
-                WHERE trang_thai = 'CHO_DUYET'
-                  AND ma_phieu_xuat IN (SELECT ma_phieu_xuat FROM tbl_ct_phieu_xuat WHERE ma_lo = @ma_lo);
-              `);
-
-            exportedSummary.push({
-              ma_lo: row.ma_lo,
-              so_lo: row.so_lo,
-              exportedBaseQty: Number(row.so_luong_ton),
-              oldStatus: row.trang_thai_lo,
-              newStatus: targetLotStatus
-            });
-          }
-        }
+        exportedSummary.push({
+          ma_lo: row.ma_lo,
+          so_lo: row.so_lo,
+          exportedBaseQty: Number(row.so_luong_ton),
+          daysLeft: Number(row.so_ngay_con_lai),
+          oldStatus: row.trang_thai_lo,
+          newStatus: targetLotStatus
+        });
       }
 
       if (exportedSummary.length === 0) {

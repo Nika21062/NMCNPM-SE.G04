@@ -83,9 +83,11 @@
             <!-- /* Khu vực tìm kiếm theo tên sản phẩm ở bên phải theo đúng bố cục file drawio */ -->
             <div class="pos-search-group">
               <input
-                type="text"
+                type="search"
                 id="posSearchInput"
-                placeholder="Tìm kiếm tên thuốc.........."
+                name="gpp_pos_search_drug"
+                autocomplete="off"
+                placeholder="Tìm kiếm tên thuốc, hoạt chất, mã vạch..."
                 onkeydown="if(event.key === 'Enter') searchPosProducts()"
               />
               <button type="button" class="btn btn-search-icon" id="btnPosSearch" onclick="searchPosProducts()" title="Tìm kiếm theo tên sản phẩm">
