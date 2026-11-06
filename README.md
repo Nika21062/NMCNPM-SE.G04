@@ -22,8 +22,8 @@ Web app gồm 3 màn hình: **Bán lẻ quầy POS (FEFO)**, **Nhập kho & Ki�
 ## 2. Tải code và cài thư viện
 
 ```bash
-git clone <link-repo>
-cd <thư-mục-repo>/code
+git clone https://github.com/Nika21062/NMCNPM-SE.G04.git
+cd NMCNPM-SE.G04
 npm install
 copy .env.example .env      # macOS/Linux: cp .env.example .env
 ```
